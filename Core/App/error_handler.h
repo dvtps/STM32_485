@@ -96,6 +96,15 @@ typedef struct {
         
     #define ASSERT(expr)  ((void)0)  /* Release: 断言禁用 */
     
+    /* V3.5 Phase 3: void函数专用宏（无返回值） */
+    #define CHECK_PARAM_VOID(expr) \
+        do { \
+            if (!(expr)) { \
+                error_log(ERR_INVALID_PARAM, __LINE__); \
+                return; \
+            } \
+        } while(0)
+    
 #else
     /* Debug模式: 完整检查，支持断言 */
     #define CHECK_NULL_PTR(ptr) \
@@ -128,6 +137,16 @@ typedef struct {
                 error_assert(__FILE__, __LINE__, "Assertion failed: " #expr); \
             } \
         } while(0)
+    
+    /* V3.5 Phase 3: void函数专用宏（无返回值） */
+    #define CHECK_PARAM_VOID(expr) \
+        do { \
+            if (!(expr)) { \
+                error_assert(__FILE__, __LINE__, "Invalid parameter: " #expr); \
+                return; \
+            } \
+        } while(0)
+    
 #endif
 
 /* ======================== 函数声明 ======================== */

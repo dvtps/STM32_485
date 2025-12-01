@@ -12,6 +12,7 @@
 #include "usart.h"
 #include <stdio.h>
 #include <string.h>
+#include "error_handler.h"  /* V3.5 Phase 3: 参数验证宏 */
 
 /* ======================== 私有变量 ======================== */
 
@@ -55,11 +56,16 @@ uint8_t emm_uart_send_with_timeout(const uint8_t *data, uint16_t len, uint32_t t
     HAL_StatusTypeDef status;
     uint32_t current_tick = HAL_GetTick();
     
-    /* 参数校验 */
-    if (data == NULL || len == 0)
+    /* V3.5 Phase 3: 参数验证 */
+    if (data == NULL || len == 0 || len > 256)
     {
         g_stats.tx_error_cnt++;
-        return 1;
+        return 1;  /* 参数无效：空指针、零长度或超长 */
+    }
+    
+    if (timeout_ms == 0 || timeout_ms > 10000)
+    {
+        timeout_ms = EMM_UART_DEFAULT_TIMEOUT_MS;  /* 超时参数异常，使用默认值 */
     }
     
     /* 频率限制检查 */

@@ -13,6 +13,7 @@
 #include "modbus_gateway.h"
 #include "modbus_rtu.h"
 #include "modbus_hal.h"
+#include "error_handler.h"  /* V3.5 Phase 3: 参数验证宏 */
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -87,6 +88,10 @@ int modbus_gateway_init(void)
  */
 int modbus_gateway_read_holding_registers(uint16_t start_addr, uint16_t num_regs, uint8_t *data)
 {
+    /* V3.5 Phase 3: 参数验证 */
+    CHECK_NULL_PTR(data);
+    CHECK_PARAM(num_regs > 0 && num_regs <= 125);  /* Modbus协议限制最大125个寄存器 */
+    
     uint16_t i;
     uint16_t reg_value;
     uint16_t end_addr = start_addr + num_regs - 1;
@@ -113,6 +118,9 @@ int modbus_gateway_read_holding_registers(uint16_t start_addr, uint16_t num_regs
  */
 int modbus_gateway_write_single_register(uint16_t reg_addr, uint16_t reg_value)
 {
+    /* V3.5 Phase 3: 参数验证 */
+    CHECK_PARAM(reg_addr <= 0x08FF);  /* 地址范围验证 */
+    
     /* 检查地址范围 */
     if (reg_addr > 0x08FF) {
         return MODBUS_EX_ILLEGAL_DATA_ADDRESS;
@@ -132,6 +140,10 @@ int modbus_gateway_write_single_register(uint16_t reg_addr, uint16_t reg_value)
  */
 int modbus_gateway_write_multiple_registers(uint16_t start_addr, uint16_t num_regs, const uint8_t *data)
 {
+    /* V3.5 Phase 3: 参数验证 */
+    CHECK_NULL_PTR(data);
+    CHECK_PARAM(num_regs > 0 && num_regs <= 123);  /* Modbus协议限制最大123个寄存器 */
+    
     uint16_t i;
     uint16_t reg_value;
     int ret;
