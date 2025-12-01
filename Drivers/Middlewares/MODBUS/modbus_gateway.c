@@ -17,6 +17,7 @@
 #include "emm_v5.h"          /* V3.5 Phase 5: 电机查询命令和响应解析 */
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>          /* V3.5 Phase 6: abs()函数 */
 #include <inttypes.h>
 
 /* ======================== 私有变量 ======================== */
@@ -53,17 +54,24 @@ typedef struct {
     uint8_t  ready;              /* 就绪状态（0=未就绪, 1=就绪） */
     int16_t  current_speed;      /* 当前速度(RPM, 有符号) */
     int32_t  current_position;   /* 当前位置(脉冲数, 有符号) */
+    int32_t  target_position;    /* 目标位置(脉冲数, 有符号) V3.5 Phase 6 */
     uint16_t fault_flags;        /* 故障标志（bit0=堵转, bit1=过流, bit2=欠压等） */
+    uint16_t fault_code;         /* 故障码（motor_fault_code_t, V3.5 Phase 6） */
     uint32_t last_query_tick;    /* 上次查询时间戳(ms) */
     uint8_t  query_pending;      /* 查询挂起标志（0=空闲, 1=等待响应） */
+    uint8_t  timeout_count;      /* 连续超时计数（V3.5 Phase 6） */
+    uint16_t fault_history;      /* 历史故障记录（V3.5 Phase 6，最近16次） */
 } motor_runtime_state_t;
 
 /* 电机运行时状态数组（最多支持8个电机） */
 static motor_runtime_state_t g_motor_runtime_state[MODBUS_MAX_MOTORS] = {0};
 
+/* V3.5 Phase 6: 电机查询统计数组（每个电机独立统计） */
+static motor_query_stats_t g_motor_query_stats[MODBUS_MAX_MOTORS] = {0};
+
 /* 状态轮询配置参数 */
 #define MOTOR_QUERY_INTERVAL_MS     100     /* 每个电机查询间隔100ms */
-#define MOTOR_QUERY_TIMEOUT_MS      50      /* 单次查询超时50ms */
+#define MOTOR_QUERY_TIMEOUT_MS      50      /* 查询超时时间50ms */
 
 /* ======================== 私有函数声明 ======================== */
 
@@ -402,7 +410,17 @@ void modbus_gateway_update_motor_status(void)
         /* 超时处理 */
         if ((current_tick - state->last_query_tick) > MOTOR_QUERY_TIMEOUT_MS) {
             state->query_pending = 0;  /* 清除挂起标志 */
-            GATEWAY_DEBUG_PRINTF("电机%d查询超时\r\n", motor_addr);
+            state->timeout_count++;     /* V3.5 Phase 6: 增加超时计数 */
+            g_motor_query_stats[poll_motor_index].timeouts++;  /* V3.5 Phase 6: 统计超时 */
+            GATEWAY_DEBUG_PRINTF("电机%d查询超时（连续%d次）\r\n", motor_addr, state->timeout_count);
+            
+            /* V3.5 Phase 6: 连续3次超时判定为通信故障 */
+            if (state->timeout_count >= MOTOR_FAULT_TIMEOUT_THRESHOLD) {
+                state->fault_code |= MOTOR_FAULT_COMM_TIMEOUT;
+                state->fault_flags |= 0x0002;  /* 设置通信超时标志位 */
+                g_motor_status_regs[poll_motor_index].fault_code = state->fault_code;
+                g_motor_status_regs[poll_motor_index].error_code = 0x04;  /* Modbus从站设备故障 */
+            }
         } else {
             /* 仍在等待响应，跳过本次轮询 */
             poll_motor_index = (poll_motor_index + 1) % MODBUS_MAX_MOTORS;
@@ -415,6 +433,9 @@ void modbus_gateway_update_motor_status(void)
     
     state->last_query_tick = current_tick;
     state->query_pending = 1;  /* 设置挂起标志，等待响应解析 */
+    
+    /* V3.5 Phase 6: 统计查询次数 */
+    g_motor_query_stats[poll_motor_index].total_queries++;
     
     /* 切换到下一个电机 */
     poll_motor_index = (poll_motor_index + 1) % MODBUS_MAX_MOTORS;
@@ -445,7 +466,25 @@ void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *dat
     
     /* 更新状态缓存 */
     state = &g_motor_runtime_state[motor_addr - 1];
-    state->query_pending = 0;  /* 清除挂起标志 */
+    state->query_pending = 0;  /* 清除查询挂起标志 */
+    
+    /* V3.5 Phase 6: 成功响应，清除超时计数 */
+    if (state->timeout_count > 0) {
+        state->timeout_count = 0;  /* 重置超时计数 */
+        /* 清除通信超时故障标志（如果有） */
+        state->fault_code &= ~MOTOR_FAULT_COMM_TIMEOUT;
+        state->fault_flags &= ~0x0002;
+    }
+    
+    /* V3.5 Phase 6: 统计成功响应 */
+    g_motor_query_stats[motor_addr - 1].successful_responses++;
+    
+    /* V3.5 Phase 6: 计算成功率 */
+    if (g_motor_query_stats[motor_addr - 1].total_queries > 0) {
+        g_motor_query_stats[motor_addr - 1].success_rate = 
+            (float)g_motor_query_stats[motor_addr - 1].successful_responses * 100.0f / 
+            (float)g_motor_query_stats[motor_addr - 1].total_queries;
+    }
     
     /* 根据功能码更新对应状态 */
     switch (response.cmd) {
@@ -476,6 +515,110 @@ void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *dat
         default:
             break;
     }
+}
+
+/**
+ * @brief  周期性检查电机故障状态（V3.5 Phase 6新增）
+ * @note   在主循环中调用，建议250ms周期
+ *         检测项：通信超时、堵转、超速、位置误差、使能失败
+ */
+void modbus_gateway_check_motor_faults(void)
+{
+    static uint32_t last_check_tick = 0;
+    uint32_t current_tick = HAL_GetTick();
+    
+    /* 250ms周期检测 */
+    if ((current_tick - last_check_tick) < MOTOR_FAULT_CHECK_INTERVAL_MS) {
+        return;
+    }
+    last_check_tick = current_tick;
+    
+    /* 遍历所有电机 */
+    for (uint8_t i = 0; i < MODBUS_MAX_MOTORS; i++) {
+        motor_runtime_state_t *state = &g_motor_runtime_state[i];
+        uint16_t old_fault_code = state->fault_code;
+        
+        /* 1. 通信完全丢失检测：5秒无响应 */
+        if ((current_tick - state->last_query_tick) > 5000 && state->last_query_tick > 0) {
+            state->fault_code |= MOTOR_FAULT_COMM_LOST;
+            state->fault_flags |= 0x0020;
+        } else {
+            state->fault_code &= ~MOTOR_FAULT_COMM_LOST;
+            state->fault_flags &= ~0x0020;
+        }
+        
+        /* 2. 堵转检测：从EMM_V5响应的stalled标志已在handle_motor_response中设置 */
+        /* 此处仅确保状态一致性 */
+        if (state->fault_flags & 0x0001) {
+            state->fault_code |= MOTOR_FAULT_STALLED;
+        }
+        
+        /* 3. 超速检测：实际速度 > 5000 RPM */
+        if (abs(state->current_speed) > MOTOR_FAULT_SPEED_MAX) {
+            state->fault_code |= MOTOR_FAULT_OVERSPEED;
+            state->fault_flags |= 0x0004;
+        } else {
+            state->fault_code &= ~MOTOR_FAULT_OVERSPEED;
+            state->fault_flags &= ~0x0004;
+        }
+        
+        /* 4. 位置误差检测：|目标-实际| > 500脉冲 */
+        if (state->target_position != 0) {  /* 仅在有目标位置时检测 */
+            int32_t position_error = abs(state->target_position - state->current_position);
+            if (position_error > MOTOR_FAULT_POSITION_ERROR_MAX) {
+                state->fault_code |= MOTOR_FAULT_POSITION_ERR;
+                state->fault_flags |= 0x0008;
+            } else {
+                state->fault_code &= ~MOTOR_FAULT_POSITION_ERR;
+                state->fault_flags &= ~0x0008;
+            }
+        }
+        
+        /* 5. 使能失败检测：control_regs.enable=1但state.enabled=0 */
+        if (g_motor_control_regs[i].enable == 1 && state->enabled == 0) {
+            /* 需要一定延迟判断（500ms），避免误判 */
+            static uint32_t enable_fail_tick[MODBUS_MAX_MOTORS] = {0};
+            if (enable_fail_tick[i] == 0) {
+                enable_fail_tick[i] = current_tick;
+            } else if ((current_tick - enable_fail_tick[i]) > 500) {
+                state->fault_code |= MOTOR_FAULT_ENABLE_FAIL;
+                state->fault_flags |= 0x0010;
+            }
+        } else {
+            state->fault_code &= ~MOTOR_FAULT_ENABLE_FAIL;
+            state->fault_flags &= ~0x0010;
+        }
+        
+        /* 6. 同步到Modbus状态寄存器 */
+        if (state->fault_code != old_fault_code) {
+            g_motor_status_regs[i].fault_code = state->fault_code;
+            
+            /* 设置历史故障记录（最近16次，循环移位） */
+            if (state->fault_code != MOTOR_FAULT_NONE) {
+                state->fault_history = (state->fault_history << 1) | 0x0001;
+            } else {
+                state->fault_history = (state->fault_history << 1);
+            }
+            
+            GATEWAY_DEBUG_PRINTF("电机%d故障码更新: 0x%04X\r\n", i+1, state->fault_code);
+        }
+    }
+}
+
+/**
+ * @brief  获取指定电机的查询统计信息（V3.5 Phase 6新增）
+ * @param  motor_index: 电机索引（0-7）
+ * @retval 查询统计结构体
+ */
+motor_query_stats_t modbus_gateway_get_query_stats(uint8_t motor_index)
+{
+    motor_query_stats_t empty_stats = {0};
+    
+    if (motor_index >= MODBUS_MAX_MOTORS) {
+        return empty_stats;
+    }
+    
+    return g_motor_query_stats[motor_index];
 }
 
 /**

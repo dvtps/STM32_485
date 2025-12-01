@@ -29,6 +29,12 @@
 /* 最大电机数量由 app_config.h 的 MODBUS_MAX_MOTORS 定义 */
 #define MODBUS_REGS_PER_MOTOR           64      /* 每个电机寄存器数 */
 
+/* V3.5 Phase 6: 电机故障阈值配置 */
+#define MOTOR_FAULT_TIMEOUT_THRESHOLD   3       /* 连续超时3次触发故障 */
+#define MOTOR_FAULT_SPEED_MAX           5000    /* 最大安全速度5000 RPM */
+#define MOTOR_FAULT_POSITION_ERROR_MAX  500     /* 最大位置误差500脉冲 */
+#define MOTOR_FAULT_CHECK_INTERVAL_MS   250     /* 故障检测周期250ms */
+
 /* ======================== 寄存器地址定义 ======================== */
 
 /* 全局控制区（0x0000-0x007F, 128寄存器） */
@@ -123,6 +129,19 @@ typedef enum {
     MOTION_TYPE_ABSOLUTE = 2,          /* 绝对位置 */
 } motor_motion_type_t;
 
+/**
+ * @brief 电机故障码位域枚举（V3.5 Phase 6）
+ */
+typedef enum {
+    MOTOR_FAULT_NONE         = 0x0000,  /* 无故障 */
+    MOTOR_FAULT_STALLED      = 0x0001,  /* 堵转故障（bit0） */
+    MOTOR_FAULT_COMM_TIMEOUT = 0x0002,  /* 通信超时（bit1，连续3次） */
+    MOTOR_FAULT_OVERSPEED    = 0x0004,  /* 超速故障（bit2） */
+    MOTOR_FAULT_POSITION_ERR = 0x0008,  /* 位置误差过大（bit3） */
+    MOTOR_FAULT_ENABLE_FAIL  = 0x0010,  /* 使能失败（bit4） */
+    MOTOR_FAULT_COMM_LOST    = 0x0020,  /* 通信完全丢失（bit5，无响应） */
+} motor_fault_code_t;
+
 /* ======================== 数据结构定义 ======================== */
 
 /**
@@ -161,10 +180,22 @@ typedef struct {
     uint16_t reserved1[10];
     uint16_t status_flags;          /* 状态标志 */
     uint16_t reserved2[5];
-    uint16_t error_code;            /* 错误码 */
+    uint16_t error_code;            /* 错误码（V3.5 Phase 6扩展） */
+    uint16_t fault_code;            /* 故障码（motor_fault_code_t, V3.5 Phase 6新增） */
     /* 更多状态... */
-    uint16_t reserved3[41];         /* 预留空间（共64寄存器） */
+    uint16_t reserved3[40];         /* 预留空间（共64寄存器） */
 } motor_status_regs_t;
+
+/**
+ * @brief 电机查询统计结构体（V3.5 Phase 6）
+ */
+typedef struct {
+    uint32_t total_queries;         /* 总查询次数 */
+    uint32_t successful_responses;  /* 成功响应次数 */
+    uint32_t parse_failures;        /* 解析失败次数 */
+    uint32_t timeouts;              /* 超时次数 */
+    float    success_rate;          /* 成功率(%) */
+} motor_query_stats_t;
 
 /**
  * @brief 全局控制寄存器结构体
@@ -340,6 +371,21 @@ uint8_t modbus_gateway_is_motor_ready(uint8_t motor_id);
  * @note   在USART2 IDLE中断中调用，更新电机状态缓存
  */
 void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *data, uint16_t len);
+
+/**
+ * @brief  周期性检查电机故障状态（V3.5 Phase 6新增）
+ * @retval None
+ * @note   在主循环中调用，建议250ms周期
+ *         检测项：通信超时、堵转、超速、位置误差、使能失败
+ */
+void modbus_gateway_check_motor_faults(void);
+
+/**
+ * @brief  获取指定电机的查询统计信息（V3.5 Phase 6新增）
+ * @param  motor_index: 电机索引（0-7）
+ * @retval 查询统计结构体
+ */
+motor_query_stats_t modbus_gateway_get_query_stats(uint8_t motor_index);
 
 /* ======================== 调试宏定义 ======================== */
 

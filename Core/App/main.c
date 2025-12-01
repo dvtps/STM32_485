@@ -131,6 +131,11 @@ int main(void)
         modbus_gateway_update_motor_status();
 #endif
         
+        /* 任务3.6：电机故障检测（V3.5 Phase 6新增，中等优先级，250ms周期） */
+#if FEATURE_MODBUS_ENABLE
+        modbus_gateway_check_motor_faults();
+#endif
+        
         /* 任务4：通信超时检测（V3.5新增，10ms周期） */
         if (sys_timer_expired(&main_loop_timer))
         {
