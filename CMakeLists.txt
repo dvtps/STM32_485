@@ -47,41 +47,67 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    # ============ App层（纯业务逻辑编排） ============
     Core/App/main.c
     Core/App/motor_zdt.c
-    Core/App/motor_state.c
-    Core/App/log_system.c
-    Core/App/modbus_rtu.c
-    Core/App/modbus_gateway.c
+    Core/App/app_init.c
+    Core/App/diagnostic.c
+    Core/App/modbus_adapter.c
+    Core/App/modbus_task.c
+    Core/App/key_manager.c  # V3.2: 按键去抖状态机（App层）
+    
+    # ============ Drivers/SYSTEM（系统级基础设施） ============
+    Drivers/SYSTEM/sys/sys.c
+    Drivers/SYSTEM/delay/delay.c
+    Drivers/SYSTEM/fifo/fifo.c
+    Drivers/SYSTEM/usart/usart.c
+    Drivers/SYSTEM/usart/usart_dma.c
+    
+    # ============ Drivers/BSP（板级硬件驱动） ============
     Drivers/BSP/EMM_V5/emm_v5.c
-    Drivers/BSP/EMM_V5/emm_fifo.c
     Drivers/BSP/EMM_V5/emm_uart.c
+    Drivers/BSP/EMM_V5/emm_state.c
     Drivers/BSP/LED/led.c
     Drivers/BSP/KEY/key.c
     Drivers/BSP/IWDG/iwdg.c
     Drivers/BSP/IWDG/iwdg_timer.c
-    Drivers/SYSTEM/sys/sys.c
-    Drivers/SYSTEM/delay/delay.c
-    Drivers/SYSTEM/usart/usart.c
-    Drivers/SYSTEM/usart/usart_dma.c
+    Drivers/BSP/PROTOCOL_ROUTER/protocol_router.c  # V3.0: 协议路由器
+    
+    # ============ Drivers/Middlewares（中间件层） ============
+    Drivers/Middlewares/LOGGER/logger.c
+    Drivers/Middlewares/MODBUS/modbus_hal.c
+    Drivers/Middlewares/MODBUS/modbus_rtu.c
+    Drivers/Middlewares/MODBUS/modbus_gateway.c
+    Drivers/Middlewares/MULTI_MOTOR/multi_motor_manager.c  # V3.1: 多电机管理中间件
     Drivers/Middlewares/USMART/usmart.c
     Drivers/Middlewares/USMART/usmart_str.c
     Drivers/Middlewares/USMART/usmart_config.c
     Drivers/Middlewares/USMART/usmart_port.c
+    Drivers/Middlewares/USMART/usmart_interface.c  # V3.1: USMART接口实现
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
+    # App层（业务编排）
     Core/App
+    
+    # SYSTEM层（系统核心）
+    Drivers/SYSTEM/sys
+    Drivers/SYSTEM/delay
+    Drivers/SYSTEM/fifo
+    Drivers/SYSTEM/usart
+    
+    # BSP层（硬件抽象）
     Drivers/BSP/EMM_V5
     Drivers/BSP/LED
     Drivers/BSP/KEY
     Drivers/BSP/IWDG
-    Drivers/SYSTEM/sys
-    Drivers/SYSTEM/delay
-    Drivers/SYSTEM/usart
+    Drivers/BSP/PROTOCOL_ROUTER  # V3.0: 协议路由器
+    
+    # Middlewares层（可重用服务）
+    Drivers/Middlewares/LOGGER
+    Drivers/Middlewares/MODBUS
+    Drivers/Middlewares/MULTI_MOTOR  # V3.1: 多电机管理中间件
     Drivers/Middlewares/USMART
 )
 

@@ -21,7 +21,7 @@
  */
 
 #include "usart.h"
-#include "emm_fifo.h"
+#include "fifo.h"
 #include "stm32f1xx_hal.h"
 
 /* DMA接收缓冲区（独立于FIFO，作为DMA目标） */

@@ -43,8 +43,11 @@
 #define WKUP_PRES    2                  /* KEY_UP按下(即WK_UP) */
 
 /******************************************************************************************/
+/* V3.2架构重构：BSP层API */
 
-void key_init(void);                    /* 按键初始化函数 */
-uint8_t key_scan(uint8_t mode);         /* 按键扫描函数 */
+void key_init(void);                    /* GPIO初始化 */
+uint8_t key_read_key0(void);            /* 读取KEY0原始电平 (0=未按, 1=按下) */
+uint8_t key_read_wkup(void);            /* 读取WKUP原始电平 (0=未按, 1=按下) */
+uint8_t key_scan(uint8_t mode);         /* 兼容旧版（无去抖，建议用上层状态机） */
 
 #endif

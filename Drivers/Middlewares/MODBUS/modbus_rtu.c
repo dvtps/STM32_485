@@ -11,8 +11,6 @@
 
 #include "modbus_rtu.h"
 #include "modbus_gateway.h"
-#include "usart.h"
-#include "delay.h"
 #include <string.h>
 
 /* ======================== 私有变量 ======================== */

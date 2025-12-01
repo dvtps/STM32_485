@@ -4,9 +4,11 @@
 
 基于STM32F103C8的闭环步进电机控制系统，使用张大头Y系列V2.0电机通过RS485通信。项目采用HAL库+CMake构建，核心为双串口架构：USART1调试输出 + USART2电机通信。
 
+**当前版本**: V3.0 (2025-12-01 架构优化版)  
 **目标硬件**: 正点原子M48Z-M3开发板（STM32F103C8，72MHz）  
 **电机驱动**: 张大头Emm_V5.0协议（16细分，3200脉冲/圈）  
-**构建系统**: CMake + gcc-arm-none-eabi + Ninja
+**构建系统**: CMake + gcc-arm-none-eabi + Ninja  
+**关键特性**: 3层架构设计 + 统一通信层 + IWDG看门狗 + USMART调试
 
 ---
 
@@ -56,30 +58,58 @@ Core/
     └── app_functions.h    # USMART可调用函数声明
 
 Drivers/
-├── BSP/                   # 板级驱动
-│   ├── EMM_V5/            # 电机协议封装（移植自张大头例程）
+├── BSP/                   # 板级驱动（硬件抽象层）
+│   ├── EMM_V5/            # 电机协议封装（V3.0统一通信层）
 │   │   ├── emm_v5.c       # 15个API：位置/速度/回零/使能控制
-│   │   └── emm_fifo.c     # 环形队列（256字节）
+│   │   ├── emm_fifo.c     # 环形队列（256字节）
+│   │   ├── emm_uart.c     # ✨ V3.0新增：统一RS485通信层（220行）
+│   │   └── emm_uart.h     # 通信接口定义+统计功能
 │   ├── LED/               # LED指示灯驱动
 │   ├── KEY/               # 按键输入驱动
-│   └── IWDG/              # 独立看门狗驱动（2s超时）
+│   ├── IWDG/              # 独立看门狗驱动（2s超时）
+│   └── PROTOCOL_ROUTER/   # V3.0协议路由器（Modbus+Emm_V5共存）
+│       ├── protocol_router.c  # 帧类型识别与路由分发
+│       └── protocol_router.h
 ├── SYSTEM/                # 核心系统驱动
 │   ├── usart/             # USART1+2统一管理，RS485发送+IDLE接收
 │   ├── delay/             # 72MHz校准的延时
+│   ├── fifo/              # FIFO缓冲区
 │   └── sys/               # 时钟配置（RCC_PLL_MUL9 = 8MHz*9）
-└── Middlewares/           # 中间件层
-    └── USMART/            # 正点原子串口调试组件
-        ├── usmart.c       # 命令解析核心
-        ├── usmart_config.c # 可调用函数列表配置
-        └── usmart_port.c  # TIM4定时扫描+串口接收
+└── Middlewares/           # 中间件层（可重用功能组件）
+    ├── MODBUS/            # V3.0 Modbus RTU协议栈
+    │   ├── modbus_rtu.c   # 协议解析与帧构造
+    │   ├── modbus_gateway.c  # 寄存器映射网关
+    │   └── modbus_hal.c   # 硬件抽象接口
+    ├── MULTI_MOTOR/       # ✨ V3.1多电机管理中间件
+    │   ├── multi_motor_manager.c  # 电机发现/批量控制/状态监控
+    │   └── multi_motor_manager.h
+    ├── USMART/            # 正点原子串口调试组件
+    │   ├── usmart.c       # 命令解析核心
+    │   ├── usmart_config.c # 可调用函数列表配置
+    │   ├── usmart_interface.c  # V3.1接口桥接层
+    │   └── usmart_port.c  # TIM4定时扫描+串口接收
+    └── LOGGER/            # 日志系统
+        └── logger.c
 ```
 
 **命名约定**: 
 - 全局变量前缀`g_`（如`g_emm_frame_complete`）
 - HAL外设句柄`g_uart1_handle`/`g_uart2_handle`
 - FIFO函数前缀`emm_fifo_*`
+- 通信层函数前缀`emm_uart_*`
 
-**通信层简化**: `emm_v5.c`通过`atk_rs485_send_data()`薄封装调用USART2，实际可直接使用`HAL_UART_Transmit(&g_uart2_handle, ...)`（ATK_RS485模块为历史遗留兼容层）。
+**V3.0三层架构**（关键设计）:
+```
+应用层 (motor_zdt.c)  → 调用 Emm_V5_* API
+    ↓
+协议层 (emm_v5.c)     → 构造Emm_V5协议帧
+    ↓
+通信层 (emm_uart.c)   → 统一RS485发送接口 ✨ V3.0新增
+    ↓
+硬件层 (usart.c)      → HAL_UART_Transmit/Receive
+```
+
+**关键改进**: V3.0移除了ATK_RS485历史遗留层，`emm_v5.c`通过`emm_uart_send()`统一调用，简化了`emm_v5_send_cmd()`函数从24行→10行（-58%），提升可维护性和可移植性。
 
 ---
 
@@ -140,7 +170,7 @@ usmart_dev.init(72);                // USMART初始化(系统时钟72MHz)
 
 **时钟依赖**: `sys_stm32_clock_init()`必须在`delay_init()`前调用，参数必须匹配（72MHz → 72）。
 
-### USMART串口调试工具（新增V2.0）
+### USMART串口调试工具（V3.0集成）
 
 **功能**: 通过USART1串口助手调用任意C函数，支持10进制/16进制参数输入。
 
@@ -338,22 +368,30 @@ Emm_V5_Origin_Trigger_Return(0x01, 0, false);  // 电机1，模式0，立即执�
 - **保持**: `emm_v5.c`的API签名（保证与电机协议兼容）
 - **注意**: `usart.c`的`USART2_IRQHandler`（IDLE中断关键路径）
 
-## 已完成优化
+## 版本历史
 
-### V2.0 架构优化（2025-12-01）
+### V3.0 架构优化（2025-12-01）
 
-1. **移除ATK_RS485冗余层**: `emm_v5.c`直接调用`HAL_UART_Transmit(&g_uart2_handle, ...)`
+**核心改进**:
+1. **统一通信层**: 新增`emm_uart.c/h`，移除ATK_RS485历史遗留层，简化协议层代码58%
+2. **删除冗余文件**: 移除6个测试文件（main.c.bak, rs485_test.c等），保持单一入口
+3. **三层架构**: 建立清晰的 应用层→协议层→通信层→硬件层 依赖关系
+4. **统计功能**: 通信层集成tx_success/error/busy/throttle计数器，支持运行时监控
+5. **可配置性**: 支持阻塞/中断/DMA三种发送模式（当前使用阻塞模式）
+
+**资源占用**:
+```
+Flash: 28984 bytes (44.23% of 64KB)  优化前29116→优化后28984 (-132 bytes)
+RAM:   约3500 bytes (17% of 20KB)
+```
+
+### V2.0 基础架构（2025-11-30）
+
+1. **HAL库移植**: 从张大头标准库例程迁移到HAL库
 2. **目录重组**: `Core/SYSTEM` → `Drivers/SYSTEM`, `Core/BSP` → `Drivers/BSP`
-3. **统一配置**: 创建`Core/App/app_config.h`集中管理电机/RS485/系统参数
+3. **统一配置**: 创建`Core/App/app_config.h`集中管理系统参数
 4. **看门狗保护**: 新增`Drivers/BSP/IWDG/`独立看门狗驱动（2s超时）
-5. **USMART集成**: 新增串口调试组件，支持通过USART1调用电机控制函数
-
-### 资源占用（V2.0）
-
-```
-Flash: 24972 bytes (38.10% of 64KB)
-RAM:   3336 bytes (16.29% of 20KB)
-```
+5. **USMART集成**: 串口调试组件，支持通过USART1调用电机控制函数
 
 ---
 

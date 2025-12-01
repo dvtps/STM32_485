@@ -840,11 +840,109 @@ cmake --build build    # 使用已配置的构建类型
 
 ---
 
+## 📦 集成 V3.0 项目代码
+
+**CubeMX生成基础工程后，需要集成以下模块**（参考本项目架构）:
+
+### 1. 复制驱动文件
+
+从本项目复制以下目录到新工程：
+
+```
+Drivers/BSP/               → 板级驱动
+  ├── EMM_V5/              → 电机协议（包含emm_uart统一通信层）
+  ├── LED/                 → LED驱动
+  ├── KEY/                 → 按键驱动
+  └── IWDG/                → 看门狗驱动
+
+Drivers/SYSTEM/            → 系统驱动（已有USART则替换）
+  ├── usart/               → 双串口驱动（USART1+2）
+  ├── delay/               → 延时函数
+  └── sys/                 → 系统配置
+
+Drivers/Middlewares/       → 中间件
+  └── USMART/              → 串口调试工具
+
+Core/App/                  → 应用层
+  ├── motor_zdt.c/h        → 电机控制应用
+  └── app_config.h         → 统一配置文件
+```
+
+### 2. 更新 CMakeLists.txt
+
+在 `target_sources()` 添加：
+```cmake
+# BSP驱动
+Drivers/BSP/EMM_V5/emm_v5.c
+Drivers/BSP/EMM_V5/emm_fifo.c
+Drivers/BSP/EMM_V5/emm_uart.c  # V3.0统一通信层
+Drivers/BSP/LED/led.c
+Drivers/BSP/KEY/key.c
+Drivers/BSP/IWDG/iwdg.c
+
+# 系统驱动（替换CubeMX生成的usart.c）
+Drivers/SYSTEM/usart/usart.c
+Drivers/SYSTEM/delay/delay.c
+Drivers/SYSTEM/sys/sys.c
+
+# 中间件
+Drivers/Middlewares/USMART/usmart.c
+Drivers/Middlewares/USMART/usmart_config.c
+Drivers/Middlewares/USMART/usmart_port.c
+
+# 应用层
+Core/App/motor_zdt.c
+```
+
+在 `target_include_directories()` 添加：
+```cmake
+Drivers/BSP/EMM_V5
+Drivers/BSP/LED
+Drivers/BSP/KEY
+Drivers/BSP/IWDG
+Drivers/SYSTEM/usart
+Drivers/SYSTEM/delay
+Drivers/SYSTEM/sys
+Drivers/Middlewares/USMART
+Core/App
+```
+
+### 3. 关键注意事项
+
+⚠️ **与CubeMX代码冲突处理**:
+
+| CubeMX生成 | 本项目驱动 | 处理方式 |
+|-----------|-----------|---------|
+| `Core/Src/usart.c` | `Drivers/SYSTEM/usart/usart.c` | 使用本项目版本（包含IDLE中断） |
+| `Core/Src/main.c` | `Core/App/main.c` | 合并初始化代码到本项目main.c |
+| GPIO初始化 | `gpio.c` | 保留CubeMX生成的gpio.c |
+
+✅ **V3.0架构优势**:
+- 统一通信层 `emm_uart.c` 支持阻塞/中断/DMA三种模式
+- 无ATK_RS485历史遗留层，代码更清晰
+- USMART集成，支持串口调试命令
+- IWDG看门狗保护，系统更稳定
+
+### 4. 验证集成
+
+编译并检查输出：
+```bash
+cmake --build --preset Debug
+```
+
+预期Flash占用: **28984 bytes (44.23%)** for V3.0
+
+---
+
 ## 📞 需要帮助？
 
 **如果遇到问题，请告诉我**:
 1. 卡在哪一步了？
 2. 看到什么错误信息？
 3. 截图会更容易帮您解决！
+
+**参考文档**:
+- `.github/copilot-instructions.md` - V3.0完整架构说明
+- `Docs/架构优化总结_V3.0.md` - 优化细节和对比
 
 **现在请告诉我您的进度** 😊

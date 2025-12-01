@@ -22,6 +22,8 @@
 
 ## 🚀 快速开始
 
+> 💡 **V3.0架构说明**: 本项目STM32_485已升级到V3.0架构，使用统一通信层`emm_uart.c`替代`ATK_RS485`。下方代码为通用示例，实际项目参考 `.github/copilot-instructions.md`
+
 ### 硬件连接（RS485模式）
 
 ```
@@ -34,22 +36,39 @@ STM32开发板          RS485模块        Y系列电机
                      B     -----→    B
 ```
 
-### 基本初始化代码
+### 基本初始化代码（通用原理）
 
 ```c
-// 初始化RS485通信（波特率115200）
-atk_rs485_init(115200);
+// V3.0项目中使用 usart_init(115200) 初始化USART1+2
+// emm_uart_init() 自动在usart_init()后初始化通信层
 
 // 等待电机上电初始化完成
-delay_ms(2000);
+HAL_Delay(2000);
 
 // 使能电机
-Emm_V5_En_Control(1, true, false);
+Emm_V5_En_Control(0x01, true, false);
 
 // 位置控制示例：转动一圈
-// 参数：地址1, 顺时针, 1000RPM, 加速度0, 3200脉冲(1圈), 相对运动, 不同步
-Emm_V5_Pos_Control(1, 0, 1000, 0, 3200, false, false);
+// 参数：地址1, 顺时针, 300RPM, 加速度10, 3200脉冲(1圈), 相对运动, 不同步
+Emm_V5_Pos_Control(0x01, 0, 300, 10, 3200, false, false);
+
+// V3.0新增：查看通信统计
+emm_uart_print_stats();  // 输出成功率、错误次数等
 ```
+
+### V3.0项目特有功能
+
+```c
+// USMART串口调试（通过USART1发送命令）
+motor_enable(1, 1)                    // 使能电机1
+motor_pos_move(1, 0, 300, 10, 3200)   // 电机1转1圈
+motor_vel_move(1, 0, 500, 20)         // 电机1持续转动
+motor_stop(1)                         // 急停电机1
+motor_home(1)                         // 电机1回零
+emm_uart_print_stats()                // 查看通信统计
+```
+
+**查看完整V3.0架构**: `../../.github/copilot-instructions.md`
 
 ---
 

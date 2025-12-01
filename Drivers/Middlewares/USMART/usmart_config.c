@@ -9,7 +9,6 @@
 #include "sys.h"
 #include "delay.h"
 #include "usmart_interface.h"  /* USMART 可调用函数接口 */
-#include "rs485_test.h"        /* RS485测试函数 */
 
 /* 函数名列表初始化(用户自己添加)
  * 用户直接在这里输入要执行的函数名及其查找串
@@ -45,6 +44,20 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)motor_stop, "void motor_stop(uint8_t addr)"},
     {(void *)motor_home, "void motor_home(uint8_t addr)"},
     {(void *)motor_read_status, "void motor_read_status(uint8_t addr)"},
+    
+    /* V3.1: 多电机管理模块 */
+    {(void *)multi_scan, "void multi_scan(uint8_t start,uint8_t end)"},
+    {(void *)multi_map, "void multi_map(uint8_t modbus,uint8_t physical)"},
+    {(void *)multi_list, "void multi_list(void)"},
+    {(void *)multi_enable, "void multi_enable(uint16_t mask,uint8_t enable)"},
+    {(void *)multi_pos, "void multi_pos(uint16_t mask,uint8_t dir,uint16_t speed,uint32_t pulses)"},
+    {(void *)multi_vel, "void multi_vel(uint16_t mask,uint8_t dir,uint16_t speed)"},
+    {(void *)multi_stop, "void multi_stop(uint16_t mask)"},
+    {(void *)multi_home, "void multi_home(uint16_t mask,uint8_t mode)"},
+    
+    /* V3.1: 协议统计模块 */
+    {(void *)proto_stats, "void proto_stats(void)"},
+    {(void *)proto_reset, "void proto_reset(void)"},
 };
 
 /******************************************************************************************/

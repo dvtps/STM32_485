@@ -18,10 +18,11 @@
 
 #include "motor_zdt.h"
 #include "app_config.h"
-#include "key.h"
+#include "key_manager.h"  /* V3.2: 使用App层按键管理器 */
 #include "led.h"
 #include "emm_v5.h"
 #include "usart.h"
+#include "logger.h"  /* 更新路径 */
 
 /* 私有变量 */
 static uint32_t led_tick = 0;               /* LED闪烁时间戳 */
@@ -60,20 +61,20 @@ void motor_zdt_run(void)
         LOG_WARN("电机响应超时(第%u次)\r\n", (unsigned int)motor_timeout_count);
     }
     
-    /* 按键扫描与处理 */
-    key = key_scan(0);
+    /* 按键扫描与处理（V3.2: 使用App层key_manager） */
+    key = key_manager_scan(0);
     
     /* 按键防抖：至少间隔KEY_ACTION_DELAY_MS才响应 */
     if (key != 0 && (HAL_GetTick() - key_debounce_tick) > KEY_ACTION_DELAY_MS)
     {
         key_debounce_tick = HAL_GetTick();
         
-        if (key == KEY0_PRES)                           /* KEY0按下：使能电机 */
+        if (key == KEY_MGR_KEY0_PRESS)                  /* KEY0按下：使能电机 */
         {
             Emm_V5_En_Control(MOTOR_DEFAULT_ADDRESS, true, false);
             LOG_INFO("电机使能\r\n");
         }
-        else if (key == WKUP_PRES)                      /* WKUP按下：位置模式测试 */
+        else if (key == KEY_MGR_WKUP_PRESS)             /* WKUP按下：位置模式测试 */
         {
             /* 使用配置文件中的参数 */
             Emm_V5_Pos_Control(MOTOR_DEFAULT_ADDRESS, MOTOR_DEFAULT_DIR, 

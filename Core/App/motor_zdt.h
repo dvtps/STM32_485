@@ -20,7 +20,7 @@
 #define __MOTOR_ZDT_H
 
 #include "stm32f1xx_hal.h"
-#include "log_system.h"  /* Phase 4统一日志系统 */
+#include "logger.h"  /* 日志系统（已移至Middlewares） */
 
 /* 函数声明 */
 void motor_zdt_init(void);          /* ZDT电机初始化 */

@@ -2,12 +2,17 @@
  ****************************************************************************************************
  * @file        key.c
  * @author      正点原子团队(ALIENTEK)
- * @version     V1.0
- * @date        2023-08-01
- * @brief       按键输入 驱动代码
+ * @version     V3.2 (架构重构版)
+ * @date        2025-12-02
+ * @brief       按键输入 驱动代码（BSP层：仅GPIO读取）
  * @license     Copyright (c) 2020-2032, 广州市星翼电子科技有限公司
  ****************************************************************************************************
  * @attention
+ *
+ * 架构定位：BSP层 - 硬件抽象（无状态）
+ * - V3.2移除状态机逻辑 → 迁移到App层key_manager
+ * - BSP层仅提供GPIO原始电平读取接口
+ * - 去抖/连按/状态管理由上层负责
  *
  * 实验平台:正点原子 M48Z-M3最小系统板STM32F103版
  * 在线视频:www.yuanzige.com
@@ -20,21 +25,6 @@
 
 #include "key.h"
 #include "stm32f1xx_hal.h"
-
-/* 按键状态机定义 */
-typedef enum {
-    KEY_STATE_IDLE = 0,        /* 空闲状态 */
-    KEY_STATE_DEBOUNCE,        /* 去抖动状态 */
-    KEY_STATE_PRESSED          /* 按下确认状态 */
-} key_state_t;
-
-/* 私有变量 */
-static key_state_t key0_state = KEY_STATE_IDLE;
-static key_state_t wkup_state = KEY_STATE_IDLE;
-static uint32_t key0_debounce_tick = 0;
-static uint32_t wkup_debounce_tick = 0;
-
-#define KEY_DEBOUNCE_TIME_MS    10    /* 去抖动时间10ms */
 
 /**
  * @brief       按键初始化函数
@@ -61,93 +51,45 @@ void key_init(void)
 }
 
 /**
- * @brief       按键扫描函数（状态机实现，非阻塞）
- * @note        优先级: WK_UP > KEY0
- * @param       mode:0 / 1,具体含义如下:
- *   @arg       0,  不支持连续按
- *   @arg       1,  支持连续按
+ * @brief       读取KEY0原始电平（BSP层接口）
+ * @param       无
+ * @retval      0: 未按下（高电平）, 1: 按下（低电平）
+ */
+uint8_t key_read_key0(void)
+{
+    return (KEY0 == 1) ? 1 : 0;
+}
+
+/**
+ * @brief       读取WKUP原始电平（BSP层接口）
+ * @param       无
+ * @retval      0: 未按下（低电平）, 1: 按下（高电平）
+ */
+uint8_t key_read_wkup(void)
+{
+    return (WK_UP == 1) ? 1 : 0;
+}
+
+/**
+ * @brief       按键扫描函数（兼容旧版，保留向后兼容）
+ * @note        ⚠️ V3.2架构重构：建议使用key_read_key0()/key_read_wkup() + App层状态机
+ *              此函数简化为立即检测模式，无去抖/无状态
+ * @param       mode: 保留参数（兼容性），当前版本无效
  * @retval      键值: KEY0_PRES(1) / WKUP_PRES(2) / 0(无按键)
  */
 uint8_t key_scan(uint8_t mode)
 {
-    uint8_t key_val = 0;
-    uint32_t current_tick = HAL_GetTick();
+    (void)mode;  /* 未使用参数 */
     
-    /* 状态机处理KEY0 */
-    switch (key0_state)
+    /* 简化实现：优先级 WKUP > KEY0 */
+    if (WK_UP == 1)
     {
-        case KEY_STATE_IDLE:
-            if (KEY0 == 1)  /* 检测到低电平(按下) */
-            {
-                key0_state = KEY_STATE_DEBOUNCE;
-                key0_debounce_tick = current_tick;
-            }
-            break;
-            
-        case KEY_STATE_DEBOUNCE:
-            if ((current_tick - key0_debounce_tick) >= KEY_DEBOUNCE_TIME_MS)
-            {
-                if (KEY0 == 1)  /* 去抖后仍为低电平 */
-                {
-                    key0_state = KEY_STATE_PRESSED;
-                    key_val = KEY0_PRES;
-                }
-                else  /* 抖动干扰，回到空闲 */
-                {
-                    key0_state = KEY_STATE_IDLE;
-                }
-            }
-            break;
-            
-        case KEY_STATE_PRESSED:
-            if (mode == 1)  /* 支持连按 */
-            {
-                key_val = KEY0_PRES;
-            }
-            if (KEY0 == 0)  /* 按键释放 */
-            {
-                key0_state = KEY_STATE_IDLE;
-            }
-            break;
+        return WKUP_PRES;
+    }
+    else if (KEY0 == 1)
+    {
+        return KEY0_PRES;
     }
     
-    /* 状态机处理WKUP（高优先级，可覆盖KEY0） */
-    switch (wkup_state)
-    {
-        case KEY_STATE_IDLE:
-            if (WK_UP == 1)  /* 检测到高电平(按下) */
-            {
-                wkup_state = KEY_STATE_DEBOUNCE;
-                wkup_debounce_tick = current_tick;
-            }
-            break;
-            
-        case KEY_STATE_DEBOUNCE:
-            if ((current_tick - wkup_debounce_tick) >= KEY_DEBOUNCE_TIME_MS)
-            {
-                if (WK_UP == 1)  /* 去抖后仍为高电平 */
-                {
-                    wkup_state = KEY_STATE_PRESSED;
-                    key_val = WKUP_PRES;  /* 覆盖KEY0 */
-                }
-                else  /* 抖动干扰，回到空闲 */
-                {
-                    wkup_state = KEY_STATE_IDLE;
-                }
-            }
-            break;
-            
-        case KEY_STATE_PRESSED:
-            if (mode == 1)  /* 支持连按 */
-            {
-                key_val = WKUP_PRES;
-            }
-            if (WK_UP == 0)  /* 按键释放 */
-            {
-                wkup_state = KEY_STATE_IDLE;
-            }
-            break;
-    }
-    
-    return key_val;
+    return 0;
 }

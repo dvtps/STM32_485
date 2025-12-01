@@ -11,7 +11,7 @@
 
 #include "modbus_gateway.h"
 #include "modbus_rtu.h"
-#include "emm_v5.h"
+#include "modbus_hal.h"
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -295,7 +295,10 @@ int modbus_gateway_write_single_coil(uint16_t coil_addr, uint16_t coil_value)
     } else if (coil_addr == COIL_SYNC_MOTION_TRIGGER) {
         /* 同步运动触发（0x0C14） */
         if (coil_value == 0xFF00) {
-            Emm_V5_Synchronous_motion(0);  /* 广播同步命令 */
+            const modbus_motor_callbacks_t *cb = modbus_get_motor_callbacks();
+            if (cb && cb->motor_sync_motion) {
+                cb->motor_sync_motion(0);  /* 广播同步命令 */
+            }
         }
     }
     
@@ -361,15 +364,25 @@ int modbus_gateway_execute_motor_command(uint8_t motor_id, motor_command_t comma
     ctrl_regs = &g_motor_control_regs[motor_id - 1];
     sync_flag = (ctrl_regs->sync_flag == 1);
     
+    /* 获取回调函数 */
+    const modbus_motor_callbacks_t *cb = modbus_get_motor_callbacks();
+    if (cb == NULL) {
+        return MODBUS_EX_SLAVE_DEVICE_FAILURE;  /* 未注册回调 */
+    }
+    
     /* 根据命令码执行 */
     switch (command) {
         case MOTOR_CMD_ENABLE:
-            Emm_V5_En_Control(motor_id, true, sync_flag);
+            if (cb->motor_enable) {
+                cb->motor_enable(motor_id, true, sync_flag);
+            }
             GATEWAY_DEBUG_PRINTF("电机%d使能\r\n", motor_id);
             break;
             
         case MOTOR_CMD_DISABLE:
-            Emm_V5_En_Control(motor_id, false, sync_flag);
+            if (cb->motor_enable) {
+                cb->motor_enable(motor_id, false, sync_flag);
+            }
             GATEWAY_DEBUG_PRINTF("电机%d失能\r\n", motor_id);
             break;
             
@@ -379,32 +392,38 @@ int modbus_gateway_execute_motor_command(uint8_t motor_id, motor_command_t comma
             
             /* 根据控制模式选择命令 */
             if (ctrl_regs->ctrl_mode == CTRL_MODE_POSITION_TRAPEZOID) {
-                Emm_V5_Pos_Control(
-                    motor_id,
-                    ctrl_regs->direction,
-                    ctrl_regs->speed / 10,  /* 0.1RPM → RPM */
-                    ctrl_regs->acceleration,
-                    (uint32_t)position,
-                    (ctrl_regs->motion_type == MOTION_TYPE_ABSOLUTE),
-                    sync_flag
-                );
+                if (cb->motor_pos_control) {
+                    cb->motor_pos_control(
+                        motor_id,
+                        ctrl_regs->direction,
+                        ctrl_regs->speed / 10,  /* 0.1RPM → RPM */
+                        ctrl_regs->acceleration,
+                        (uint32_t)position,
+                        (ctrl_regs->motion_type == MOTION_TYPE_ABSOLUTE),
+                        sync_flag
+                    );
+                }
             }
             GATEWAY_DEBUG_PRINTF("电机%d位置运动: pos=%d\r\n", motor_id, (int)position);
             break;
             
         case MOTOR_CMD_VEL_MOVE:
-            Emm_V5_Vel_Control(
-                motor_id,
-                ctrl_regs->direction,
-                ctrl_regs->speed / 10,
-                ctrl_regs->acceleration,
-                sync_flag
-            );
+            if (cb->motor_vel_control) {
+                cb->motor_vel_control(
+                    motor_id,
+                    ctrl_regs->direction,
+                    ctrl_regs->speed / 10,
+                    ctrl_regs->acceleration,
+                    sync_flag
+                );
+            }
             GATEWAY_DEBUG_PRINTF("电机%d速度运动: speed=%d\r\n", motor_id, ctrl_regs->speed);
             break;
             
         case MOTOR_CMD_STOP:
-            Emm_V5_Stop_Now(motor_id, sync_flag);
+            if (cb->motor_stop) {
+                cb->motor_stop(motor_id, sync_flag);
+            }
             GATEWAY_DEBUG_PRINTF("电机%d立即停止\r\n", motor_id);
             break;
             
@@ -414,7 +433,9 @@ int modbus_gateway_execute_motor_command(uint8_t motor_id, motor_command_t comma
             break;
             
         case MOTOR_CMD_CLEAR_POS:
-            Emm_V5_Reset_CurPos_To_Zero(motor_id);
+            if (cb->motor_reset_position) {
+                cb->motor_reset_position(motor_id);
+            }
             GATEWAY_DEBUG_PRINTF("电机%d清零位置\r\n", motor_id);
             break;
             

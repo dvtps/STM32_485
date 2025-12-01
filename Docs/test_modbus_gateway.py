@@ -121,7 +121,7 @@ def test_02_write_single_register(client):
     
     try:
         # 写入速度寄存器（1000 RPM = 10000个0.1RPM）
-        result = client.write_register(MOTOR1_BASE + MOTOR_REG_SPEED, 10000, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.write_register(MOTOR1_BASE + MOTOR_REG_SPEED, 10000, slave=SLAVE_ADDRESS)
         
         if result.isError():
             print_error(f"写入失败: {result}")
@@ -130,7 +130,7 @@ def test_02_write_single_register(client):
         print_success("写入成功: SPEED = 10000 (1000.0 RPM)")
         
         # 回读验证
-        result = client.read_holding_registers(MOTOR1_BASE + MOTOR_REG_SPEED, 1, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.read_holding_registers(MOTOR1_BASE + MOTOR_REG_SPEED, 1, slave=SLAVE_ADDRESS)
         if not result.isError():
             speed = result.registers[0]
             print_info(f"回读验证: SPEED = {speed} ({speed/10.0} RPM)")
@@ -162,7 +162,7 @@ def test_03_write_multiple_registers(client):
         result = client.write_registers(
             MOTOR1_BASE + MOTOR_REG_CTRL_MODE, 
             values, 
-            address=start_addr, count=num, device_id=SLAVE_ADDRESS
+            slave=SLAVE_ADDRESS
         )
         
         if result.isError():
@@ -194,7 +194,7 @@ def test_04_single_motor_position_control(client):
         result = client.write_register(
             MOTOR1_BASE + MOTOR_REG_ENABLE, 
             1, 
-            address=start_addr, count=num, device_id=SLAVE_ADDRESS
+            slave=SLAVE_ADDRESS
         )
         if result.isError():
             print_error("使能失败")
@@ -210,7 +210,7 @@ def test_04_single_motor_position_control(client):
         result = client.write_register(
             MOTOR1_BASE + MOTOR_REG_EXEC_COMMAND, 
             CMD_POS_MOVE, 
-            address=start_addr, count=num, device_id=SLAVE_ADDRESS
+            slave=SLAVE_ADDRESS
         )
         if result.isError():
             print_error("执行失败")
@@ -242,7 +242,7 @@ def test_05_read_motor_status(client):
         result = client.read_input_registers(
             MOTOR1_STATUS_BASE, 
             6, 
-            address=start_addr, count=num, device_id=SLAVE_ADDRESS
+            slave=SLAVE_ADDRESS
         )
         
         if result.isError():
@@ -284,7 +284,7 @@ def test_06_coil_operations(client):
     try:
         # 写线圈：使能电机1
         print_info("使能电机1...")
-        result = client.write_coil(COIL_MOTOR1_ENABLE, True, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.write_coil(COIL_MOTOR1_ENABLE, True, slave=SLAVE_ADDRESS)
         if result.isError():
             print_error("写入失败")
             return False
@@ -293,14 +293,14 @@ def test_06_coil_operations(client):
         time.sleep(1)
         
         # 读取线圈状态
-        result = client.read_coils(COIL_MOTOR1_ENABLE, 1, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.read_coils(COIL_MOTOR1_ENABLE, 1, slave=SLAVE_ADDRESS)
         if not result.isError():
             status = result.bits[0]
             print_info(f"线圈状态: {'ON' if status else 'OFF'}")
         
         # 失能电机1
         print_info("失能电机1...")
-        result = client.write_coil(COIL_MOTOR1_ENABLE, False, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.write_coil(COIL_MOTOR1_ENABLE, False, slave=SLAVE_ADDRESS)
         if result.isError():
             print_error("写入失败")
             return False
@@ -320,7 +320,7 @@ def test_07_emergency_stop(client):
     
     try:
         print_warning("触发紧急停止...")
-        result = client.write_coil(COIL_EMERGENCY_STOP, True, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        result = client.write_coil(COIL_EMERGENCY_STOP, True, slave=SLAVE_ADDRESS)
         
         if result.isError():
             print_error("触发失败")
@@ -330,7 +330,7 @@ def test_07_emergency_stop(client):
         
         # 复位急停线圈
         time.sleep(0.5)
-        client.write_coil(COIL_EMERGENCY_STOP, False, address=start_addr, count=num, device_id=SLAVE_ADDRESS)
+        client.write_coil(COIL_EMERGENCY_STOP, False, slave=SLAVE_ADDRESS)
         print_info("紧急停止线圈已复位")
         
         return True

@@ -78,26 +78,26 @@
 #define RS485_RX_BUFFER_SIZE        256         /* 接收FIFO大小 */
 
 /* ====================================================================================
-   [3] 标准Modbus协议配置 - 用于上位机/PLC通信（预留，未实现）
+   [3] 标准Modbus协议配置 - 用于上位机/PLC通信
    ==================================================================================== */
 /* 
  * 说明: 
- * - 张大头电机使用 Modbus-Like 协议（类Modbus帧格式 + 厂商功能码 + 固定校验0x6B）
- * - 此处配置的是"标准Modbus RTU/ASCII"协议，用于与上位机/PLC通信
- * - 两种协议可以同时存在：
- *   → 电机通信(USART2): Emm_V5.0协议（类Modbus）
- *   → 上位机通信(USART1/USART3): 标准Modbus RTU（如需要）
+ * - 张大头电机使用 Emm_V5.0 协议（类Modbus帧格式 + 厂商功能码 + 固定校验0x6B）
+ * - 此处配置的是"标准Modbus RTU"协议，通过寄存器映射控制电机
+ * - 架构设计：
+ *   → USART2: 电机直接通信 (Emm_V5协议) - BSP层
+ *   → Modbus RTU: 上位机通信 (标准协议) - Middlewares层
+ *   → Gateway: Modbus寄存器 → 电机命令映射 - App层
  */
 
-#define MODBUS_ENABLE               0           /* 1=启用标准Modbus功能, 0=禁用（预留） */
+#define FEATURE_MODBUS_ENABLE       1           /* 1=启用Modbus RTU功能, 0=禁用 */
 
-#if MODBUS_ENABLE
-#define MODBUS_MODE                 0           /* 0=RTU模式(CRC16), 1=ASCII模式(LRC) */
-#define MODBUS_SLAVE_ADDRESS        0x01        /* 从机地址: 1-247 */
-#define MODBUS_BAUDRATE             9600        /* 波特率: 9600/19200/115200 */
-#define MODBUS_PARITY               0           /* 校验位: 0=无, 1=奇, 2=偶 */
-#define MODBUS_RESPONSE_TIMEOUT     200         /* 响应超时(ms) */
-#define MODBUS_USART                USART1      /* 使用的串口（不能与电机通信冲突） */
+#if FEATURE_MODBUS_ENABLE
+#define MODBUS_SLAVE_ADDRESS        1           /* Modbus从机地址: 1-247 */
+#define MODBUS_BAUDRATE             115200      /* 波特率: 9600/19200/115200 */
+#define MODBUS_RESPONSE_TIMEOUT_MS  200         /* 响应超时(ms) */
+#define MODBUS_MAX_MOTORS           16          /* 最大支持电机数量 */
+#define MODBUS_FRAME_TIMEOUT_MS     50          /* 帧间隔超时(ms) */
 #endif
 
 /* ====================================================================================
@@ -162,6 +162,5 @@
 
 /* 兼容性定义（避免修改主程序代码） */
 #define FEATURE_WATCHDOG_ENABLE     WATCHDOG_ENABLE
-#define FEATURE_MODBUS_ENABLE       MODBUS_ENABLE
 
 #endif /* __APP_CONFIG_H */

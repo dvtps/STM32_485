@@ -148,6 +148,8 @@ int modbus_rtu_build_response(const modbus_rtu_frame_t *frame, uint8_t *tx_buffe
  * @param  tx_len: 输出发送长度指针
  * @retval 0=成功, -1=失败
  */
+int modbus_rtu_build_exception(uint8_t slave_addr, uint8_t function_code, uint8_t exception_code, 
+                                uint8_t *tx_buffer, uint16_t *tx_len);
 int modbus_rtu_build_exception(uint8_t slave_addr, uint8_t function_code, uint8_t exception_code,
                                 uint8_t *tx_buffer, uint16_t *tx_len);
 

@@ -1,28 +1,27 @@
 /**
  ****************************************************************************************************
- * @file        emm_fifo.h
- * @author      张大头闭环伺服 + 正点原子团队适配
- * @version     V1.0 (HAL库版本)
+ * @file        fifo.h
+ * @author      STM32_485 Project (SYSTEM Layer)
+ * @version     V3.0
  * @date        2025-12-01
- * @brief       FIFO环形缓冲队列（用于电机通信）
- * @license     基于张大头原始代码，适配正点原子M48Z-M3开发板
+ * @brief       通用FIFO环形缓冲队列（SYSTEM层基础设施）
  ****************************************************************************************************
  * @attention
  * 
- * 原始作者: ZHANGDATOU (https://zhangdatou.taobao.com)
- * HAL库适配: 正点原子团队(ALIENTEK)
+ * 架构定位: SYSTEM层 - 通用数据结构
  * 实验平台: 正点原子 M48Z-M3最小系统板STM32F103版
  * 
  * 功能说明:
- * - 环形队列，用于串口接收数据缓冲
+ * - 通用环形队列实现
  * - 支持中断中快速入队，主循环中批量出队
- * - 队列大小128字节
+ * - 线程安全（通过关中断保护）
+ * - 队列大小256字节
  * 
  ****************************************************************************************************
  */
 
-#ifndef __EMM_FIFO_H
-#define __EMM_FIFO_H
+#ifndef __FIFO_H
+#define __FIFO_H
 
 #include "stm32f1xx_hal.h"
 #include <stdint.h>
@@ -50,4 +49,4 @@ uint16_t emm_fifo_length(void);                     /* 计算队列长度 */
 uint8_t emm_fifo_get_usage_percent(void);           /* 获取FIFO使用率(0-100) - Phase 2新增 */
 uint8_t emm_fifo_is_high_water(void);               /* 检查是否超过80%水位 - Phase 2新增 */
 
-#endif
+#endif /* __FIFO_H */
