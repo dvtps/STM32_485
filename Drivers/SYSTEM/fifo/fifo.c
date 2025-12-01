@@ -21,6 +21,7 @@
 
 /* 全局变量定义 */
 __IO EMM_FIFO_t g_emm_rx_fifo = {0};
+EMM_FIFO_stats_t g_emm_fifo_stats = {0};            /* FIFO统计信息 */
 
 /**
  * @brief       初始化FIFO队列
@@ -31,16 +32,25 @@ void emm_fifo_init(void)
 {
     g_emm_rx_fifo.ptrRead  = 0;
     g_emm_rx_fifo.ptrWrite = 0;
+    
+    /* 初始化统计信息 */
+    g_emm_fifo_stats.enqueue_ok_cnt = 0;
+    g_emm_fifo_stats.enqueue_overflow_cnt = 0;
+    g_emm_fifo_stats.dequeue_cnt = 0;
+    g_emm_fifo_stats.high_water_mark = 0;
+    g_emm_fifo_stats.overflow_last_tick = 0;
 }
 
 /**
  * @brief       数据入队（在中断中调用）
  * @param       data: 要入队的数据
  * @retval      0: 成功, 1: 队列已满
+ * @note        V3.5增强: 添加溢出统计和水位监控
  */
 uint8_t emm_fifo_enqueue(uint16_t data)
 {
     uint16_t next_write = g_emm_rx_fifo.ptrWrite + 1;
+    uint16_t current_len;
     
     /* 环绕处理 */
     if (next_write >= EMM_FIFO_SIZE)
@@ -51,12 +61,25 @@ uint8_t emm_fifo_enqueue(uint16_t data)
     /* 检查队列满（写指针追上读指针） */
     if (next_write == g_emm_rx_fifo.ptrRead)
     {
+        /* 溢出统计 */
+        g_emm_fifo_stats.enqueue_overflow_cnt++;
+        g_emm_fifo_stats.overflow_last_tick = HAL_GetTick();
         return 1;  /* 队列已满，丢弃数据 */
     }
     
     /* 写入数据 */
     g_emm_rx_fifo.buffer[g_emm_rx_fifo.ptrWrite] = data;
     g_emm_rx_fifo.ptrWrite = next_write;
+    
+    /* 成功统计 */
+    g_emm_fifo_stats.enqueue_ok_cnt++;
+    
+    /* 更新历史最高水位 */
+    current_len = emm_fifo_length();
+    if (current_len > g_emm_fifo_stats.high_water_mark)
+    {
+        g_emm_fifo_stats.high_water_mark = current_len;
+    }
     
     return 0;  /* 成功 */
 }
@@ -65,6 +88,7 @@ uint8_t emm_fifo_enqueue(uint16_t data)
  * @brief       数据出队
  * @param       无
  * @retval      出队的数据
+ * @note        V3.5增强: 添加出队统计
  */
 uint16_t emm_fifo_dequeue(void)
 {
@@ -78,6 +102,9 @@ uint16_t emm_fifo_dequeue(void)
     {
         g_emm_rx_fifo.ptrRead = 0;
     }
+    
+    /* 出队统计 */
+    g_emm_fifo_stats.dequeue_cnt++;
 
     return element;
 }
@@ -134,4 +161,39 @@ uint8_t emm_fifo_is_high_water(void)
 {
     uint16_t len = emm_fifo_length();
     return (len >= EMM_FIFO_WARN_LEVEL) ? 1 : 0;
+}
+
+/**
+ * @brief       获取FIFO统计信息 (V3.5新增)
+ * @param       stats: 输出统计数据的指针
+ * @retval      无
+ * @note        原子操作，可在中断中调用
+ */
+void emm_fifo_get_stats(EMM_FIFO_stats_t *stats)
+{
+    if (stats == NULL) return;
+    
+    __disable_irq();
+    stats->enqueue_ok_cnt = g_emm_fifo_stats.enqueue_ok_cnt;
+    stats->enqueue_overflow_cnt = g_emm_fifo_stats.enqueue_overflow_cnt;
+    stats->dequeue_cnt = g_emm_fifo_stats.dequeue_cnt;
+    stats->high_water_mark = g_emm_fifo_stats.high_water_mark;
+    stats->overflow_last_tick = g_emm_fifo_stats.overflow_last_tick;
+    __enable_irq();
+}
+
+/**
+ * @brief       清除FIFO统计信息 (V3.5新增)
+ * @param       无
+ * @retval      无
+ */
+void emm_fifo_clear_stats(void)
+{
+    __disable_irq();
+    g_emm_fifo_stats.enqueue_ok_cnt = 0;
+    g_emm_fifo_stats.enqueue_overflow_cnt = 0;
+    g_emm_fifo_stats.dequeue_cnt = 0;
+    g_emm_fifo_stats.high_water_mark = 0;
+    g_emm_fifo_stats.overflow_last_tick = 0;
+    __enable_irq();
 }

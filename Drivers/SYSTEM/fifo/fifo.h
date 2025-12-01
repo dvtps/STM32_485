@@ -37,8 +37,18 @@ typedef struct {
     __IO uint8_t ptrRead;                           /* 读指针(uint8_t支持128) */
 } EMM_FIFO_t;
 
+/* FIFO统计信息结构体 (V3.5生产级优化新增) */
+typedef struct {
+    uint32_t enqueue_ok_cnt;                        /* 成功入队计数 */
+    uint32_t enqueue_overflow_cnt;                  /* 溢出丢弃计数 */
+    uint32_t dequeue_cnt;                           /* 出队计数 */
+    uint32_t high_water_mark;                       /* 历史最高水位 */
+    uint32_t overflow_last_tick;                    /* 最后一次溢出时间戳 */
+} EMM_FIFO_stats_t;
+
 /* 外部变量声明 */
 extern __IO EMM_FIFO_t g_emm_rx_fifo;               /* 接收FIFO队列 */
+extern EMM_FIFO_stats_t g_emm_fifo_stats;           /* FIFO统计信息 */
 
 /* 函数声明 */
 void emm_fifo_init(void);                           /* 初始化队列 */
@@ -48,5 +58,7 @@ uint8_t emm_fifo_is_empty(void);                    /* 判断队列是否为空 
 uint16_t emm_fifo_length(void);                     /* 计算队列长度 */
 uint8_t emm_fifo_get_usage_percent(void);           /* 获取FIFO使用率(0-100) - Phase 2新增 */
 uint8_t emm_fifo_is_high_water(void);               /* 检查是否超过80%水位 - Phase 2新增 */
+void emm_fifo_get_stats(EMM_FIFO_stats_t *stats);   /* 获取统计信息 - V3.5新增 */
+void emm_fifo_clear_stats(void);                    /* 清除统计信息 - V3.5新增 */
 
 #endif /* __FIFO_H */

@@ -55,11 +55,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/modbus_adapter.c
     Core/App/modbus_task.c
     Core/App/key_manager.c  # V3.2: 按键去抖状态机（App层）
+    Core/App/error_handler.c  # V3.5: 错误处理系统
+    Core/App/comm_monitor.c  # V3.5: 通信监控与超时管理
     
     # ============ Drivers/SYSTEM（系统级基础设施） ============
     Drivers/SYSTEM/sys/sys.c
     Drivers/SYSTEM/delay/delay.c
     Drivers/SYSTEM/fifo/fifo.c
+    Drivers/SYSTEM/sys_timer/sys_timer.c  # V3.5: 非阻塞软件定时器
     Drivers/SYSTEM/usart/usart.c
     Drivers/SYSTEM/usart/usart_dma.c
     
@@ -97,6 +100,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Drivers/SYSTEM/sys
     Drivers/SYSTEM/delay
     Drivers/SYSTEM/fifo
+    Drivers/SYSTEM/sys_timer  # V3.5: 非阻塞定时器
     Drivers/SYSTEM/usart
     
     # BSP层（硬件抽象）

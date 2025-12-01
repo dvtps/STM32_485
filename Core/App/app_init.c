@@ -14,6 +14,8 @@
 #include "usart.h"
 #include "led.h"
 #include "key.h"
+#include "error_handler.h"    /* V3.5: 错误处理系统 */
+#include "comm_monitor.h"     /* V3.5: 通信监控 */
 #include <stdio.h>
 
 /**
@@ -58,6 +60,12 @@ bsp_init_status_t bsp_peripheral_init(void)
     
     /* 双串口初始化 */
     usart_init(115200);  /* USART1+2统一初始化 */
+    
+    /* V3.5: 错误处理系统初始化 */
+    error_handler_init();
+    
+    /* V3.5: 通信监控初始化 */
+    comm_monitor_init();
     
     return BSP_INIT_OK;
 }
