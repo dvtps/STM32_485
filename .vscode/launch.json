@@ -1,0 +1,80 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CMSIS-DAP Debug (PyOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "pyocd",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/STM32_485.elf",
+            "device": "stm32f103c8",
+            "runToEntryPoint": "main",
+            "svdFile": "C:/ST/STM32CubeCLT_1.19.0/STMicroelectronics_CMSIS_SVD/STM32F103.svd",
+            "showDevDebugOutput": "parsed",
+            "serverArgs": [
+                "--target", "stm32f103c8",
+                "--frequency", "4000000",
+                "--no-wait"
+            ],
+            "overrideGDBServerStartedRegex": "GDB server listening on port (\\d+)",
+            "overrideLaunchCommands": [
+                "monitor reset halt",
+                "load",
+                "monitor reset halt"
+            ],
+            "preLaunchTask": "Build Debug",
+            "numberOfProcessors": 1,
+            "targetProcessor": 0
+        },
+        {
+            "name": "ST-Link Debug (Official)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "stlink",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/STM32_485.elf",
+            "device": "STM32F103C8",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "svdFile": "C:/ST/STM32CubeCLT_1.19.0/STMicroelectronics_CMSIS_SVD/STM32F103.svd",
+            "v1": false,
+            "showDevDebugOutput": "parsed",
+            "serverpath": "C:/ST/STM32CubeCLT_1.19.0/STLink-gdb-server/bin/ST-LINK_gdbserver.exe",
+            "stm32cubeprogrammer": "C:/ST/STM32CubeCLT_1.19.0/STM32CubeProgrammer/bin",
+            "serverArgs": [
+                "-p", "61234",
+                "-d",
+                "--halt",
+                "-cp", "C:\\ST\\STM32CubeCLT_1.19.0\\STM32CubeProgrammer\\bin"
+            ],
+            "preLaunchTask": "Build Debug"
+        },
+        {
+            "name": "CMSIS-DAP Attach (PyOCD)",
+            "type": "cortex-debug",
+            "request": "attach",
+            "servertype": "pyocd",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/STM32_485.elf",
+            "device": "stm32f103c8",
+            "svdFile": "C:/ST/STM32CubeCLT_1.19.0/STMicroelectronics_CMSIS_SVD/STM32F103.svd",
+            "showDevDebugOutput": "parsed"
+        },
+        {
+            "name": "ST-Link Attach (Official)",
+            "type": "cortex-debug",
+            "request": "attach",
+            "servertype": "stlink",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/STM32_485.elf",
+            "device": "STM32F103C8",
+            "interface": "swd",
+            "svdFile": "C:/ST/STM32CubeCLT_1.19.0/STMicroelectronics_CMSIS_SVD/STM32F103.svd",
+            "v1": false,
+            "showDevDebugOutput": "parsed",
+            "serverpath": "C:/ST/STM32CubeCLT_1.19.0/STLink-gdb-server/bin/ST-LINK_gdbserver.exe",
+            "stm32cubeprogrammer": "C:/ST/STM32CubeCLT_1.19.0/STM32CubeProgrammer/bin"
+        }
+    ]
+}

@@ -1,0 +1,89 @@
+#include "usmart.h"
+#include "usmart_str.h"
+
+/******************************************************************************************/
+/* 用户配置区
+ * 这下面要包含所用到的函数所申明的头文件(用户自己添加)
+ */
+
+#include "sys.h"
+#include "delay.h"
+#include "usmart_interface.h"  /* USMART 可调用函数接口 */
+#include "rs485_test.h"        /* RS485测试函数 */
+
+/* 函数名列表初始化(用户自己添加)
+ * 用户直接在这里输入要执行的函数名及其查找串
+ * 
+ * 注: 函数指针转换为void*会产生-Wpedantic警告，属于USMART组件设计
+ * 此警告不影响功能，可在CMakeLists.txt中全局禁用或忽略
+ */
+struct _m_usmart_nametab usmart_nametab[] =
+{
+#if USMART_USE_WRFUNS == 1      /* 如果使能了读写操作 */
+    {(void *)read_addr, "uint32_t read_addr(uint32_t addr)"},
+    {(void *)write_addr, "void write_addr(uint32_t addr,uint32_t val)"},
+#endif
+    /* SYSTEM 延时函数 */
+    {(void *)delay_ms, "void delay_ms(uint16_t nms)"},
+    {(void *)delay_us, "void delay_us(uint32_t nus)"},
+    
+    /* BSP/LED 模块 */
+    {(void *)led_init, "void led_init(void)"},
+    
+    /* BSP/KEY 模块 */
+    {(void *)key_init, "void key_init(void)"},
+    {(void *)key_scan, "uint8_t key_scan(uint8_t mode)"},
+    
+    /* BSP/IWDG 模块 */
+    {(void *)iwdg_init, "void iwdg_init(uint8_t prer,uint16_t rlr)"},
+    {(void *)iwdg_feed, "void iwdg_feed(void)"},
+    
+    /* BSP/EMM_V5 电机控制模块 */
+    {(void *)motor_enable, "void motor_enable(uint8_t addr,uint8_t enable)"},
+    {(void *)motor_pos_move, "void motor_pos_move(uint8_t addr,uint8_t dir,uint16_t speed,uint8_t acc,uint32_t pulses)"},
+    {(void *)motor_vel_move, "void motor_vel_move(uint8_t addr,uint8_t dir,uint16_t speed,uint8_t acc)"},
+    {(void *)motor_stop, "void motor_stop(uint8_t addr)"},
+    {(void *)motor_home, "void motor_home(uint8_t addr)"},
+    {(void *)motor_read_status, "void motor_read_status(uint8_t addr)"},
+};
+
+/******************************************************************************************/
+
+/* 函数控制管理器初始化
+ * 得到各个受控函数的名字
+ * 得到函数总数量
+ */
+struct _m_usmart_dev usmart_dev =
+{
+    .funs = usmart_nametab,
+    .init = usmart_init,
+    .cmd_rec = usmart_cmd_rec,
+    .exe = usmart_exe,
+    .scan = usmart_scan,
+    .fnum = sizeof(usmart_nametab) / sizeof(struct _m_usmart_nametab), /* 函数数量 */
+    .pnum = 0,      /* 参数数量 */
+    .id = 0,        /* 函数ID */
+    .sptype = 1,    /* 参数显示类型,0,10进制;1,16进制 */
+    .parmtype = 0,  /* 参数类型.bitx:,0,数字;1,字符串 */
+    .plentbl = {0}, /* 每个参数的长度暂存表,需要MAX_PARM个0初始化 */
+    .parm = {0},    /* 函数的参数,需要PARM_LEN个0初始化 */
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
