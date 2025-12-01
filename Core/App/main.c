@@ -29,7 +29,7 @@
 #include "multi_motor_manager.h"  /* V3.1: 多电机管理器 */
 #endif
 
-#ifdef FEATURE_USMART_ENABLE
+#if FEATURE_USMART_ENABLE
 #include "usmart.h"
 #endif
 
@@ -61,8 +61,9 @@ int main(void)
     }
 #endif
     
-#ifdef FEATURE_USMART_ENABLE
+#if FEATURE_USMART_ENABLE
     usmart_dev.init(72);        /* USMART串口调试工具初始化 */
+    printf("USMART Debug Tool Initialized (72MHz)\r\n");
 #endif
 
 #ifdef FEATURE_DIAGNOSTIC_ENABLE

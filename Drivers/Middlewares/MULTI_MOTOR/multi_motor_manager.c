@@ -129,6 +129,8 @@ uint8_t multi_motor_get_online_count(void)
 
 /* ======================== 批量控制实现 ======================== */
 
+#if FEATURE_MULTI_MOTOR_BATCH_ENABLE
+
 /**
  * @brief       批量使能电机
  */
@@ -264,6 +266,41 @@ int multi_motor_home_batch(uint16_t motor_mask, uint8_t mode)
     
     return success > 0 ? 0 : -1;
 }
+
+#else  /* !FEATURE_MULTI_MOTOR_BATCH_ENABLE */
+
+/* 批处理函数禁用时提供占位实现 */
+int multi_motor_enable_batch(uint16_t motor_mask, bool enable) 
+{ 
+    (void)motor_mask; (void)enable;
+    return -1; 
+}
+
+int multi_motor_pos_control_batch(uint16_t motor_mask, uint8_t dir, uint16_t speed, uint8_t acc, uint32_t pulses) 
+{ 
+    (void)motor_mask; (void)dir; (void)speed; (void)acc; (void)pulses;
+    return -1; 
+}
+
+int multi_motor_vel_control_batch(uint16_t motor_mask, uint8_t dir, uint16_t speed, uint8_t acc) 
+{ 
+    (void)motor_mask; (void)dir; (void)speed; (void)acc;
+    return -1; 
+}
+
+int multi_motor_stop_batch(uint16_t motor_mask) 
+{ 
+    (void)motor_mask;
+    return -1; 
+}
+
+int multi_motor_home_batch(uint16_t motor_mask, uint8_t mode) 
+{ 
+    (void)motor_mask; (void)mode;
+    return -1; 
+}
+
+#endif  /* FEATURE_MULTI_MOTOR_BATCH_ENABLE */
 
 /* ======================== 状态轮询实现 ======================== */
 

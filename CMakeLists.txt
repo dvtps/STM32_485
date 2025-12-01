@@ -79,11 +79,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Drivers/Middlewares/MODBUS/modbus_rtu.c
     Drivers/Middlewares/MODBUS/modbus_gateway.c
     Drivers/Middlewares/MULTI_MOTOR/multi_motor_manager.c  # V3.1: 多电机管理中间件
-    Drivers/Middlewares/USMART/usmart.c
-    Drivers/Middlewares/USMART/usmart_str.c
-    Drivers/Middlewares/USMART/usmart_config.c
-    Drivers/Middlewares/USMART/usmart_port.c
-    Drivers/Middlewares/USMART/usmart_interface.c  # V3.1: USMART接口实现
+    
+    # USMART调试组件（Release构建时可移除以减少Flash占用）
+    $<$<CONFIG:Debug>:Drivers/Middlewares/USMART/usmart.c>
+    $<$<CONFIG:Debug>:Drivers/Middlewares/USMART/usmart_str.c>
+    $<$<CONFIG:Debug>:Drivers/Middlewares/USMART/usmart_config.c>
+    $<$<CONFIG:Debug>:Drivers/Middlewares/USMART/usmart_port.c>
+    $<$<CONFIG:Debug>:Drivers/Middlewares/USMART/usmart_interface.c>
 )
 
 # Add include paths
@@ -115,6 +117,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     $<$<CONFIG:Release>:NDEBUG>  # Release构建定义NDEBUG，禁用调试功能
+    
+    # V3.4功能开关（从app_config.h读取默认值，此处可覆盖）
+    # FEATURE_USMART_ENABLE=1/0  # USMART调试组件（默认Release=0, Debug=1）
+    # FEATURE_MODBUS_ENABLE=1/0  # Modbus RTU协议栈（默认=1）
+    # FEATURE_MULTI_MOTOR_BATCH_ENABLE=1/0  # 多电机批处理函数（默认=1）
 )
 
 # Add linked libraries

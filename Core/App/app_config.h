@@ -92,6 +92,16 @@
 
 #define FEATURE_MODBUS_ENABLE       1           /* 1=启用Modbus RTU功能, 0=禁用 */
 
+/* USMART串口调试工具 (Release构建可禁用以减少Flash占用) */
+#ifdef NDEBUG
+    #define FEATURE_USMART_ENABLE   0           /* Release: 禁用USMART (~2KB Flash优化) */
+#else
+    #define FEATURE_USMART_ENABLE   1           /* Debug: 启用USMART调试工具 */
+#endif
+
+/* 多电机批处理函数 (按需启用) */
+#define FEATURE_MULTI_MOTOR_BATCH_ENABLE  1     /* 1=启用批处理API (2.6KB), 0=禁用 */
+
 #if FEATURE_MODBUS_ENABLE
 #define MODBUS_SLAVE_ADDRESS        1           /* Modbus从机地址: 1-247 */
 #define MODBUS_BAUDRATE             115200      /* 波特率: 9600/19200/115200 */
@@ -127,6 +137,12 @@
 
 /* 看门狗配置 */
 #define WATCHDOG_ENABLE             0           /* 1=启用看门狗, 0=禁用 (Modbus测试时临时禁用) */
+
+/* 说明: 条件编译开关汇总
+ * - FEATURE_USMART_ENABLE: USMART调试组件 (Release自动禁用)
+ * - FEATURE_MODBUS_ENABLE: Modbus RTU协议栈 (手动配置)
+ * - FEATURE_MULTI_MOTOR_BATCH_ENABLE: 多电机批处理函数 (手动配置)
+ */
 
 #if WATCHDOG_ENABLE
 #define IWDG_TIMEOUT_MS             2000        /* 看门狗超时时间(ms): 500/1000/2000/5000 */
