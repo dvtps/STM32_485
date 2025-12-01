@@ -33,6 +33,7 @@
 #include "modbus_task.h"
 #include "protocol_router.h"  /* V3.0: 协议路由器 */
 #include "multi_motor_manager.h"  /* V3.1: 多电机管理器 */
+#include "modbus_gateway.h"   /* V3.5 Phase 5: 电机状态轮询 */
 #endif
 
 #if FEATURE_USMART_ENABLE
@@ -123,6 +124,11 @@ int main(void)
         /* 任务3：Modbus RTU通信任务（高优先级） */
 #if FEATURE_MODBUS_ENABLE
         modbus_task_run();
+#endif
+        
+        /* 任务3.5：电机状态轮询（V3.5 Phase 5新增，中等优先级） */
+#if FEATURE_MODBUS_ENABLE
+        modbus_gateway_update_motor_status();
 #endif
         
         /* 任务4：通信超时检测（V3.5新增，10ms周期） */

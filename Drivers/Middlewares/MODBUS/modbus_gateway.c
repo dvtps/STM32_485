@@ -14,6 +14,7 @@
 #include "modbus_rtu.h"
 #include "modbus_hal.h"
 #include "error_handler.h"  /* V3.5 Phase 3: 参数验证宏 */
+#include "emm_v5.h"          /* V3.5 Phase 5: 电机查询命令和响应解析 */
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -372,9 +373,9 @@ int modbus_gateway_write_multiple_coils(uint16_t start_addr, uint16_t num_coils,
 
 /**
  * @brief  周期性更新电机状态（主循环调用）
- * @note   V3.5 Phase 4: 实现电机状态轮询机制
- *         采用简化轮询策略：每次调用轮询1个电机，100ms间隔
- *         当前版本不解析响应帧，仅发送查询命令
+ * @note   V3.5 Phase 5: 完整实现电机状态轮询机制
+ *         采用轮询策略：每次调用轮询1个电机，100ms间隔
+ *         发送S_FLAG查询命令，获取使能/到位/堵转状态
  */
 void modbus_gateway_update_motor_status(void)
 {
@@ -409,18 +410,72 @@ void modbus_gateway_update_motor_status(void)
         }
     }
     
-    /* 发送状态查询命令（查询速度S_VEL） */
-    /* 注意：需要外部通过回调调用Emm_V5_Read_Sys_Params() */
-    /* 当前版本简化实现：不发送查询命令，仅更新时间戳 */
-    /* TODO Phase 4.5: 集成emm_v5查询API，解析响应帧 */
+    /* V3.5 Phase 5: 发送状态查询命令（查询S_FLAG状态标志位） */
+    Emm_V5_Read_Sys_Params(motor_addr, S_FLAG);
     
     state->last_query_tick = current_tick;
-    state->query_pending = 0;  /* 简化版本：立即清除挂起 */
+    state->query_pending = 1;  /* 设置挂起标志，等待响应解析 */
     
     /* 切换到下一个电机 */
     poll_motor_index = (poll_motor_index + 1) % MODBUS_MAX_MOTORS;
+}
+
+/**
+ * @brief  处理电机查询响应（V3.5 Phase 5新增）
+ * @param  motor_addr: 电机地址（1-8）
+ * @param  data: 响应帧数据
+ * @param  len: 响应帧长度
+ * @retval None
+ * @note   在USART2 IDLE中断中调用，更新g_motor_runtime_state
+ */
+void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *data, uint16_t len)
+{
+    emm_response_t response;
+    motor_runtime_state_t *state;
     
-    /* TODO: 解析响应帧后更新g_motor_status_regs和g_discrete_inputs */
+    /* 参数验证 */
+    if (motor_addr < 1 || motor_addr > MODBUS_MAX_MOTORS || data == NULL || len == 0) {
+        return;
+    }
+    
+    /* 解析响应帧 */
+    if (!Emm_V5_Parse_Response(data, len, &response)) {
+        return;  /* 解析失败 */
+    }
+    
+    /* 更新状态缓存 */
+    state = &g_motor_runtime_state[motor_addr - 1];
+    state->query_pending = 0;  /* 清除挂起标志 */
+    
+    /* 根据功能码更新对应状态 */
+    switch (response.cmd) {
+        case 0x3A:  /* S_FLAG - 状态标志位 */
+            state->enabled = response.data.flags.enabled;
+            state->ready = response.data.flags.arrived;  /* 到位标志表示就绪 */
+            state->fault_flags = response.data.flags.stalled ? 0x0001 : 0x0000;  /* bit0=堵转 */
+            
+            /* 同步到Modbus离散输入 */
+            if (response.data.flags.arrived) {
+                uint8_t byte_idx = (motor_addr - 1) / 8;
+                uint8_t bit_idx = (motor_addr - 1) % 8;
+                g_discrete_inputs.inputs[byte_idx] |= (1 << bit_idx);
+            }
+            break;
+            
+        case 0x35:  /* S_VEL - 速度 */
+            state->current_speed = response.data.velocity;
+            g_motor_status_regs[motor_addr - 1].real_speed = (uint16_t)response.data.velocity;
+            break;
+            
+        case 0x36:  /* S_CPOS - 位置 */
+            state->current_position = response.data.position;
+            g_motor_status_regs[motor_addr - 1].real_position_h = (uint16_t)(response.data.position >> 16);
+            g_motor_status_regs[motor_addr - 1].real_position_l = (uint16_t)(response.data.position & 0xFFFF);
+            break;
+            
+        default:
+            break;
+    }
 }
 
 /**

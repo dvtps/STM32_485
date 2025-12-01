@@ -338,3 +338,74 @@ void Emm_V5_Origin_Interrupt(uint8_t addr)
     cmd[0] = addr; cmd[1] = 0x9C; cmd[2] = 0x48; cmd[3] = EMM_V5_CHECKSUM;
     EMM_V5_SEND_CMD(cmd, 4);
 }
+
+/* ======================== V3.5 Phase 5: 响应帧解析实现 ======================== */
+
+/**
+ * @brief       解析EMM_V5电机响应�?
+ * @param       data: 响应帧数据
+ * @param       len: 响应帧长度
+ * @param       response: 解析结果输出
+ * @retval      true=解析成功, false=解析失败
+ * @note        支持S_VEL(速度), S_CPOS(位置), S_FLAG(状态标志)三种响应
+ */
+bool Emm_V5_Parse_Response(const uint8_t *data, uint16_t len, emm_response_t *response)
+{
+    /* 参数验证 */
+    if (data == NULL || response == NULL || len < 4) {
+        return false;
+    }
+    
+    /* 初始化响应结构�?*/
+    response->valid = false;
+    response->addr = data[0];
+    response->cmd = data[1];
+    response->status = 0;
+    
+    /* 检查最小帧长度和校验字节 */
+    if (data[len - 1] != EMM_V5_CHECKSUM) {
+        return false;  /* 校验字节错误 */
+    }
+    
+    /* 解析状态码（如果存在�?*/
+    if (len >= 4 && data[2] != EMM_V5_CHECKSUM) {
+        response->status = data[2];
+    }
+    
+    /* 根据功能码解析数据 */
+    switch (data[1]) {
+        case 0x35:  /* S_VEL - 读取速度 */
+            if (len >= 6) {
+                /* 速度为2字节有符号整数，高字节在�?*/
+                response->data.velocity = (int16_t)((data[2] << 8) | data[3]);
+                response->valid = true;
+            }
+            break;
+            
+        case 0x36:  /* S_CPOS - 读取位置 */
+            if (len >= 8) {
+                /* 位置为4字节有符号整数，高字节在�?*/
+                response->data.position = (int32_t)((data[2] << 24) | (data[3] << 16) | 
+                                                     (data[4] << 8) | data[5]);
+                response->valid = true;
+            }
+            break;
+            
+        case 0x3A:  /* S_FLAG - 读取状态标志位 */
+            if (len >= 4) {
+                uint8_t flag_byte = data[2];
+                response->data.flags.enabled = (flag_byte & 0x01) ? 1 : 0;  /* bit0: 使能 */
+                response->data.flags.arrived = (flag_byte & 0x02) ? 1 : 0;  /* bit1: 到位 */
+                response->data.flags.stalled = (flag_byte & 0x04) ? 1 : 0;  /* bit2: 堵转 */
+                response->data.flags.reserved = 0;
+                response->valid = true;
+            }
+            break;
+            
+        default:
+            /* 其他命令暂不解�?*/
+            break;
+    }
+    
+    return response->valid;
+}

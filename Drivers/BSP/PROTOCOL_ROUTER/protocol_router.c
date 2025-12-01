@@ -181,6 +181,12 @@ protocol_type_t protocol_router_process(const uint8_t *data, uint16_t len)
             g_emm_frame_complete = 1;  /* 通知motor_zdt处理 */
         }
         
+        /* V3.5 Phase 5: 处理电机查询响应（调用modbus_gateway解析） */
+        extern void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *data, uint16_t len);
+        if (len >= 4 && data[0] >= 1 && data[0] <= 8) {
+            modbus_gateway_handle_motor_response(data[0], data, len);
+        }
+        
         g_router_stats.emm_v5_frames++;
         return PROTOCOL_EMM_V5;
     }

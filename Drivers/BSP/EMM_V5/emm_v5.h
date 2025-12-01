@@ -61,6 +61,36 @@ typedef enum {
     S_ORG   = 16,                                   /* 读取正在回零/回零失败状态标志位 */
 } SysParams_t;
 
+/* ======================== V3.5 Phase 5: 响应帧解析结构 ======================== */
+
+/**
+ * @brief 电机状态标志位定义（S_FLAG响应）
+ */
+typedef struct {
+    uint8_t enabled   : 1;  /* bit0: 使能状态 (1=已使能, 0=未使能) */
+    uint8_t arrived   : 1;  /* bit1: 到位状态 (1=到位, 0=未到位) */
+    uint8_t stalled   : 1;  /* bit2: 堵转状态 (1=堵转, 0=正常) */
+    uint8_t reserved  : 5;  /* bit3-7: 保留 */
+} emm_status_flags_t;
+
+/**
+ * @brief EMM_V5响应帧解析结果
+ */
+typedef struct {
+    uint8_t  addr;              /* 电机地址 */
+    uint8_t  cmd;               /* 功能码 */
+    uint8_t  status;            /* 状态码 (0=成功, 1-5=错误) */
+    bool     valid;             /* 解析是否成功 */
+    
+    /* 解析数据（根据cmd类型） */
+    union {
+        int16_t  velocity;      /* 速度(RPM) - S_VEL */
+        int32_t  position;      /* 位置(脉冲数) - S_CPOS */
+        emm_status_flags_t flags;  /* 状态标志 - S_FLAG */
+        uint8_t  raw_data[8];   /* 原始数据 */
+    } data;
+} emm_response_t;
+
 /* 函数声明 */
 void Emm_V5_Reset_CurPos_To_Zero(uint8_t addr);
 void Emm_V5_Reset_Clog_Pro(uint8_t addr);
@@ -79,5 +109,8 @@ void Emm_V5_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF);
 void Emm_V5_Origin_Interrupt(uint8_t addr);
 uint32_t Emm_V5_Get_TX_Error_Count(void);                /* 获取UART发送错误计数 */
 void emm_v5_tx_complete_callback(void);                  /* 发送完成回调(usart.c调用) */
+
+/* V3.5 Phase 5: 响应帧解析函数 */
+bool Emm_V5_Parse_Response(const uint8_t *data, uint16_t len, emm_response_t *response);
 
 #endif

@@ -331,6 +331,16 @@ uint8_t modbus_gateway_is_motor_enabled(uint8_t motor_id);
  */
 uint8_t modbus_gateway_is_motor_ready(uint8_t motor_id);
 
+/**
+ * @brief  处理电机查询响应（V3.5 Phase 5新增）
+ * @param  motor_addr: 电机地址（1-8）
+ * @param  data: 响应帧数据
+ * @param  len: 响应帧长度
+ * @retval None
+ * @note   在USART2 IDLE中断中调用，更新电机状态缓存
+ */
+void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *data, uint16_t len);
+
 /* ======================== 调试宏定义 ======================== */
 
 #if defined(DEBUG) && (DEBUG == 1)
