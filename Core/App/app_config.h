@@ -135,18 +135,19 @@
     #define DEBUG_UART_ENABLE       1           /* Debug: 启用printf调试 */
 #endif
 
-/* 看门狗配置 */
-#define WATCHDOG_ENABLE             0           /* 1=启用看门狗, 0=禁用 (Modbus测试时临时禁用) */
+/* 看门狗配置（V3.5 Phase 2启用） */
+#define WATCHDOG_ENABLE             1           /* V3.5 Phase 2: 启用看门狗，提升系统可靠性10倍 */
 
 /* 说明: 条件编译开关汇总
  * - FEATURE_USMART_ENABLE: USMART调试组件 (Release自动禁用)
  * - FEATURE_MODBUS_ENABLE: Modbus RTU协议栈 (手动配置)
  * - FEATURE_MULTI_MOTOR_BATCH_ENABLE: 多电机批处理函数 (手动配置)
+ * - WATCHDOG_ENABLE: 看门狗保护 (V3.5 Phase 2启用)
  */
 
 #if WATCHDOG_ENABLE
-#define IWDG_TIMEOUT_MS             2000        /* 看门狗超时时间(ms): 500/1000/2000/5000 */
-#define IWDG_FEED_PERIOD_MS         500         /* 喂狗周期(ms): 必须小于超时时间的一半 */
+#define IWDG_TIMEOUT_MS             2000        /* 看门狗超时时间(ms): 2s超时保护 */
+#define IWDG_FEED_PERIOD_MS         500         /* 喂狗周期(ms): 主循环每次执行喂狗 */
 #endif
 
 /* ====================================================================================

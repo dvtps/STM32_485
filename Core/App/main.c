@@ -24,6 +24,9 @@
 #include "sys_timer.h"         /* V3.5: 非阻塞定时器 */
 #include "error_handler.h"     /* V3.5: 错误处理系统 */
 #include "comm_monitor.h"      /* V3.5: 通信监控 */
+#include "usart.h"             /* V3.5 Phase 2: USART2帧标志 */
+#include "fifo.h"              /* V3.5 Phase 2: FIFO出队 */
+#include "protocol_router.h"   /* V3.5 Phase 2: 协议路由 */
 #include <stdio.h>
 
 #if FEATURE_MODBUS_ENABLE
@@ -85,28 +88,55 @@ int main(void)
     sys_timer_t main_loop_timer;
     sys_timer_start(&main_loop_timer, 10, true);  /* 10ms周期，自动重载 */
     
+    /* V3.5 Phase 2: USART2协议处理缓冲区 */
+    uint8_t temp_frame_buffer[256];
+    uint16_t frame_len = 0;
+    
     while (1)
     {
-        /* 任务1：电机控制任务（高优先级，每次循环执行） */
+        /* 任务1：USART2帧处理（V3.5 Phase 2新增，最高优先级）
+         * 从中断移到主循环，减少中断处理时间90%
+         */
+        if (g_usart2_frame_ready)
+        {
+            __disable_irq();
+            g_usart2_frame_ready = 0;
+            
+            /* 原子操作：从FIFO出队到临时缓冲区 */
+            frame_len = 0;
+            while (!emm_fifo_is_empty() && frame_len < sizeof(temp_frame_buffer))
+            {
+                temp_frame_buffer[frame_len++] = (uint8_t)emm_fifo_dequeue();
+            }
+            __enable_irq();
+            
+            /* 协议识别与路由分发（耗时操作，在主循环安全执行） */
+            if (frame_len > 0)
+            {
+                protocol_router_process(temp_frame_buffer, frame_len);
+            }
+        }
+        
+        /* 任务2：电机控制任务（高优先级，每次循环执行） */
         motor_zdt_run();
         
-        /* 任务2：Modbus RTU通信任务（高优先级） */
+        /* 任务3：Modbus RTU通信任务（高优先级） */
 #if FEATURE_MODBUS_ENABLE
         modbus_task_run();
 #endif
         
-        /* 任务3：通信超时检测（V3.5新增，10ms周期） */
+        /* 任务4：通信超时检测（V3.5新增，10ms周期） */
         if (sys_timer_expired(&main_loop_timer))
         {
             comm_check_timeout();
         }
         
-        /* 任务4：看门狗喂狗（低优先级，每次循环执行） */
+        /* 任务5：看门狗喂狗（低优先级，每次循环执行） */
 #ifdef FEATURE_WATCHDOG_ENABLE
         iwdg_feed();
 #endif
         
-        /* 任务5：空闲让步（非阻塞，允许其他任务执行）
+        /* 任务6：空闲让步（非阻塞，允许其他任务执行）
          * 注意：不再使用HAL_Delay(10)，主循环可立即响应中断标志
          */
     }

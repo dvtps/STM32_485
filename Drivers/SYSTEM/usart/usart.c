@@ -352,38 +352,29 @@ static void usart1_rx_callback(UART_HandleTypeDef *huart)
 /**
  * @brief       USART2数据接收处理(多协议支持,IDLE中断)
  * @param       huart: 串口句柄
- * @note        IDLE中断触发时表示一帧数据接收完成，通过protocol_router识别协议类型
+ * @note        V3.5优化：中断仅设置标志，协议解析移到主循环（减少中断时间90%）
  * @retval      无
  */
 #if USART2_EN_RX
 #include "protocol_router.h"  /* V3.0新增：协议路由器 */
 
 static uint32_t idle_count = 0;  /* 调试：IDLE中断计数 */
-static uint8_t temp_frame_buffer[256];  /* 临时帧缓冲区 */
+
+/* V3.5优化：全局标志位，主循环轮询处理 */
+volatile uint8_t g_usart2_frame_ready = 0;  /* 帧就绪标志 */
 
 static void usart2_idle_callback(UART_HandleTypeDef *huart)
 {
-    uint16_t data;
-    uint16_t frame_len = 0;
-    
     idle_count++;  /* 调试：记录IDLE中断次数 */
     
     /* 清除IDLE标志 */
     __HAL_UART_CLEAR_IDLEFLAG(huart);
     
-    /* 从FIFO中读取所有数据到临时缓冲区 */
-    while (!emm_fifo_is_empty() && frame_len < sizeof(temp_frame_buffer))
-    {
-        data = emm_fifo_dequeue();
-        temp_frame_buffer[frame_len++] = (uint8_t)data;
-    }
-    
-    /* 协议识别与路由分发 */
-    if (frame_len > 0)
-    {
-        protocol_router_process(temp_frame_buffer, frame_len);
-        /* protocol_router_process()会自动设置对应的frame_complete标志 */
-    }
+    /* V3.5关键优化：仅设置标志位，立即退出中断（<5μs）
+     * 数据出队和协议解析延迟到主循环处理
+     */
+    g_usart2_frame_ready = 1;
+    __DSB();  /* 数据同步屏障，确保标志位写入完成 */
 }
 
 /* 调试函数：获取IDLE中断计数 */

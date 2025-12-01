@@ -94,6 +94,9 @@ extern uint8_t g_emm_rx_cmd[USART2_REC_LEN];            /* 电机命令帧缓冲
 extern uint16_t g_emm_rx_count;                         /* 电机帧长度 */
 extern volatile uint8_t g_emm_frame_complete;           /* 电机帧完成标志 */
 
+/* V3.5 Phase 2: USART2帧就绪标志（主循环轮询） */
+extern volatile uint8_t g_usart2_frame_ready;
+
 
 /* 函数声明 */
 void usart1_init(uint32_t baudrate);                    /* USART1初始化(printf调试) */
