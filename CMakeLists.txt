@@ -114,6 +114,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    $<$<CONFIG:Release>:NDEBUG>  # Release构建定义NDEBUG，禁用调试功能
 )
 
 # Add linked libraries

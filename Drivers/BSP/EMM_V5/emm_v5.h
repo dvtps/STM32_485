@@ -38,6 +38,11 @@
 /* 宏定义 */
 #define ABS(x)      ((x) > 0 ? (x) : -(x))          /* 绝对值宏 */
 
+/* Emm_V5协议常量 */
+#define EMM_V5_CHECKSUM         0x6B                /* 固定校验字节 */
+#define EMM_V5_MAX_CMD_LEN      20                  /* 最大命令长度（回零参数） */
+#define EMM_V5_MIN_CMD_LEN      4                   /* 最小命令长度 */
+
 /* 系统参数类型枚举 */
 typedef enum {
     S_VER   = 0,                                    /* 读取固件版本和对应的硬件版本 */

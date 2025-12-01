@@ -96,7 +96,7 @@
 #define MODBUS_SLAVE_ADDRESS        1           /* Modbus从机地址: 1-247 */
 #define MODBUS_BAUDRATE             115200      /* 波特率: 9600/19200/115200 */
 #define MODBUS_RESPONSE_TIMEOUT_MS  200         /* 响应超时(ms) */
-#define MODBUS_MAX_MOTORS           16          /* 最大支持电机数量 */
+#define MODBUS_MAX_MOTORS           MAX_MOTOR_COUNT /* 最大支持电机数量(使用统一配置) */
 #define MODBUS_FRAME_TIMEOUT_MS     50          /* 帧间隔超时(ms) */
 #endif
 
@@ -119,7 +119,11 @@
 
 /* 调试串口配置（USART1） */
 #define DEBUG_UART_BAUDRATE         115200      /* 调试串口波特率 */
-#define DEBUG_UART_ENABLE           1           /* 1=启用printf调试, 0=禁用 */
+#ifdef NDEBUG
+    #define DEBUG_UART_ENABLE       0           /* Release: 禁用printf */
+#else
+    #define DEBUG_UART_ENABLE       1           /* Debug: 启用printf调试 */
+#endif
 
 /* 看门狗配置 */
 #define WATCHDOG_ENABLE             0           /* 1=启用看门狗, 0=禁用 (Modbus测试时临时禁用) */
@@ -133,8 +137,12 @@
    [5] 调试功能配置 - 日志、诊断开关
    ==================================================================================== */
 
-/* 调试总开关 */
-#define DEBUG_ENABLE                1           /* 1=启用调试功能, 0=关闭 */
+/* 调试总开关 (Release构建自动禁用) */
+#ifdef NDEBUG
+    #define DEBUG_ENABLE            0           /* Release: 禁用调试功能 */
+#else
+    #define DEBUG_ENABLE            1           /* Debug: 启用调试功能 */
+#endif
 
 /* 模块调试开关 */
 #define DEBUG_MOTOR_RESPONSE        0           /* 1=打印电机响应帧, 0=关闭 */

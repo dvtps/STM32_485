@@ -26,15 +26,15 @@
 #include "stm32f1xx_hal.h"
 #include <stdint.h>
 
-/* 宏定义 (Phase 2扩容优化) */
-#define EMM_FIFO_SIZE   512                         /* FIFO深度(原128→512) */
-#define EMM_FIFO_WARN_LEVEL  410                    /* 水位警告阈值(80%) */
+/* 宏定义 (V3.3优化: 减少RAM占用) */
+#define EMM_FIFO_SIZE   128                         /* FIFO深度: 128字节(电机帧最大20B，可缓存6帧) */
+#define EMM_FIFO_WARN_LEVEL  102                    /* 水位警告阈值(80%) */
 
-/* FIFO结构体定义 (Phase 2修正: 指针类型匹配512深度) */
+/* FIFO结构体定义 (uint8_t指针足够128深度) */
 typedef struct {
-    uint16_t buffer[EMM_FIFO_SIZE];                 /* 数据缓冲区 */
-    __IO uint16_t ptrWrite;                         /* 写指针(uint16_t支持512) */
-    __IO uint16_t ptrRead;                          /* 读指针(uint16_t支持512) */
+    uint16_t buffer[EMM_FIFO_SIZE];                 /* 数据缓冲区 (uint16_t保存特殊状态) */
+    __IO uint8_t ptrWrite;                          /* 写指针(uint8_t支持128) */
+    __IO uint8_t ptrRead;                           /* 读指针(uint8_t支持128) */
 } EMM_FIFO_t;
 
 /* 外部变量声明 */

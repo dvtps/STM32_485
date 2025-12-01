@@ -10,12 +10,13 @@
 
 #include "protocol_router.h"
 #include "app_config.h"
+#include "usart.h"              /* 包含USART2_REC_LEN定义 */
 #include <string.h>
 
-/* 外部变量声明（来自各协议模块） */
-extern uint8_t g_emm_rx_cmd[256];           /* Emm_V5接收缓冲区 */
-extern volatile uint16_t g_emm_rx_count;    /* Emm_V5接收字节数 */
-extern volatile uint8_t g_emm_frame_complete; /* Emm_V5帧完成标志 */
+/* 外部变量声明（来自各协议模块，使用usart.h定义） */
+extern uint8_t g_emm_rx_cmd[USART2_REC_LEN];    /* Emm_V5接收缓冲区(220字节) */
+extern uint16_t g_emm_rx_count;                  /* Emm_V5接收字节数 */
+extern volatile uint8_t g_emm_frame_complete;    /* Emm_V5帧完成标志 */
 
 /* Modbus RTU专用缓冲区（新增） */
 uint8_t g_modbus_rx_buffer[256];            /* Modbus接收缓冲区 */

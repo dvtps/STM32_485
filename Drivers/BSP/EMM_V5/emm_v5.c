@@ -25,26 +25,14 @@
 #include "usart.h"     /* 包含全局变量 g_emm_frame_complete */
 
 /**
- * @brief       发送命令到电机（内部静态函数）
- * @param       cmd: 命令缓冲区
- * @param       len: 命令长度
- * @retval      0: 成功, 1: 失败, 2: 发送太频繁
+ * @brief       发送命令宏（内联优化，减少函数调用开销）
+ * @note        替代原static函数，从15次函数调用→直接内联
  */
-static uint8_t emm_v5_send_cmd(uint8_t *cmd, uint8_t len)
-{
-    uint8_t result;
-    
-    /* 调用统一的UART发送接口 */
-    result = emm_uart_send(cmd, len);
-    
-    /* 清空帧完成标志，准备接收响应 */
-    if (result == 0)
-    {
-        g_emm_frame_complete = 0;
-    }
-    
-    return result;
-}
+#define EMM_V5_SEND_CMD(cmd, len) \
+    do { \
+        uint8_t _result = emm_uart_send((cmd), (len)); \
+        if (_result == 0) g_emm_frame_complete = 0; \
+    } while(0)
 
 /**
  * @brief       将当前位置清零
@@ -53,16 +41,9 @@ static uint8_t emm_v5_send_cmd(uint8_t *cmd, uint8_t len)
  */
 void Emm_V5_Reset_CurPos_To_Zero(uint8_t addr)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x0A;                              /* 功能码 */
-    cmd[2] = 0x6D;                              /* 辅助码 */
-    cmd[3] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 4);
+    uint8_t cmd[4];
+    cmd[0] = addr; cmd[1] = 0x0A; cmd[2] = 0x6D; cmd[3] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 4);
 }
 
 /**
@@ -72,16 +53,9 @@ void Emm_V5_Reset_CurPos_To_Zero(uint8_t addr)
  */
 void Emm_V5_Reset_Clog_Pro(uint8_t addr)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x0E;                              /* 功能码 */
-    cmd[2] = 0x52;                              /* 辅助码 */
-    cmd[3] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 4);
+    uint8_t cmd[4];
+    cmd[0] = addr; cmd[1] = 0x0E; cmd[2] = 0x52; cmd[3] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 4);
 }
 
 /**
@@ -117,10 +91,10 @@ void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s)
         default: break;
     }
 
-    cmd[i] = 0x6B; ++i;                         /* 校验字节 */
+    cmd[i] = EMM_V5_CHECKSUM; ++i;              /* 校验字节 */
     
     /* 发送命令 */
-    emm_v5_send_cmd(cmd, i);
+    EMM_V5_SEND_CMD(cmd, i);
 }
 
 /**
@@ -132,18 +106,10 @@ void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s)
  */
 void Emm_V5_Modify_Ctrl_Mode(uint8_t addr, bool svF, uint8_t ctrl_mode)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x46;                              /* 功能码 */
-    cmd[2] = 0x69;                              /* 辅助码 */
-    cmd[3] = svF;                               /* 存储标志 */
-    cmd[4] = ctrl_mode;                         /* 控制模式 */
-    cmd[5] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 6);
+    uint8_t cmd[6];
+    cmd[0] = addr; cmd[1] = 0x46; cmd[2] = 0x69;
+    cmd[3] = svF; cmd[4] = ctrl_mode; cmd[5] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 6);
 }
 
 /**
@@ -155,18 +121,10 @@ void Emm_V5_Modify_Ctrl_Mode(uint8_t addr, bool svF, uint8_t ctrl_mode)
  */
 void Emm_V5_En_Control(uint8_t addr, bool state, bool snF)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0xF3;                              /* 功能码 */
-    cmd[2] = 0xAB;                              /* 辅助码 */
-    cmd[3] = (uint8_t)state;                    /* 使能状态 */
-    cmd[4] = snF;                               /* 多机同步标志 */
-    cmd[5] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 6);
+    uint8_t cmd[6];
+    cmd[0] = addr; cmd[1] = 0xF3; cmd[2] = 0xAB;
+    cmd[3] = (uint8_t)state; cmd[4] = snF; cmd[5] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 6);
 }
 
 /**
@@ -180,20 +138,16 @@ void Emm_V5_En_Control(uint8_t addr, bool state, bool snF)
  */
 void Emm_V5_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF)
 {
-    uint8_t cmd[16] = {0};
-
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0xF6;                              /* 功能码 */
-    cmd[2] = dir;                               /* 方向 */
-    cmd[3] = (uint8_t)(vel >> 8);               /* 速度高8位 */
-    cmd[4] = (uint8_t)(vel >> 0);               /* 速度低8位 */
-    cmd[5] = acc;                               /* 加速度 */
-    cmd[6] = snF;                               /* 多机同步标志 */
-    cmd[7] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 8);
+    uint8_t cmd[8];
+    cmd[0] = addr;
+    cmd[1] = 0xF6;
+    cmd[2] = dir;
+    cmd[3] = (uint8_t)(vel >> 8);
+    cmd[4] = (uint8_t)(vel);
+    cmd[5] = acc;
+    cmd[6] = snF;
+    cmd[7] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 8);
 }
 
 /**
@@ -209,25 +163,21 @@ void Emm_V5_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bo
  */
 void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF)
 {
-    uint8_t cmd[16] = {0};
-
-    /* 装载命令 */
-    cmd[0]  = addr;                             /* 地址 */
-    cmd[1]  = 0xFD;                             /* 功能码 */
-    cmd[2]  = dir;                              /* 方向 */
-    cmd[3]  = (uint8_t)(vel >> 8);              /* 速度高8位 */
-    cmd[4]  = (uint8_t)(vel >> 0);              /* 速度低8位 */
-    cmd[5]  = acc;                              /* 加速度 */
-    cmd[6]  = (uint8_t)(clk >> 24);             /* 脉冲数bit24-31 */
-    cmd[7]  = (uint8_t)(clk >> 16);             /* 脉冲数bit16-23 */
-    cmd[8]  = (uint8_t)(clk >> 8);              /* 脉冲数bit8-15 */
-    cmd[9]  = (uint8_t)(clk >> 0);              /* 脉冲数bit0-7 */
-    cmd[10] = raF;                              /* 相对/绝对标志 */
-    cmd[11] = snF;                              /* 多机同步标志 */
-    cmd[12] = 0x6B;                             /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 13);
+    uint8_t cmd[13];
+    cmd[0] = addr;
+    cmd[1] = 0xFD;
+    cmd[2] = dir;
+    cmd[3] = (uint8_t)(vel >> 8);
+    cmd[4] = (uint8_t)(vel);
+    cmd[5] = acc;
+    cmd[6] = (uint8_t)(clk >> 24);
+    cmd[7] = (uint8_t)(clk >> 16);
+    cmd[8] = (uint8_t)(clk >> 8);
+    cmd[9] = (uint8_t)(clk);
+    cmd[10] = raF;
+    cmd[11] = snF;
+    cmd[12] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 13);
 }
 
 /**
@@ -238,17 +188,10 @@ void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, ui
  */
 void Emm_V5_Stop_Now(uint8_t addr, bool snF)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0xFE;                              /* 功能码 */
-    cmd[2] = 0x98;                              /* 辅助码 */
-    cmd[3] = snF;                               /* 多机同步标志 */
-    cmd[4] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 5);
+    uint8_t cmd[5];
+    cmd[0] = addr; cmd[1] = 0xFE; cmd[2] = 0x98;
+    cmd[3] = snF; cmd[4] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 5);
 }
 
 /**
@@ -258,16 +201,9 @@ void Emm_V5_Stop_Now(uint8_t addr, bool snF)
  */
 void Emm_V5_Synchronous_motion(uint8_t addr)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0xFF;                              /* 功能码 */
-    cmd[2] = 0x66;                              /* 辅助码 */
-    cmd[3] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 4);
+    uint8_t cmd[4];
+    cmd[0] = addr; cmd[1] = 0xFF; cmd[2] = 0x66; cmd[3] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 4);
 }
 
 /**
@@ -278,17 +214,10 @@ void Emm_V5_Synchronous_motion(uint8_t addr)
  */
 void Emm_V5_Origin_Set_O(uint8_t addr, bool svF)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x93;                              /* 功能码 */
-    cmd[2] = 0x88;                              /* 辅助码 */
-    cmd[3] = svF;                               /* 存储标志 */
-    cmd[4] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 5);
+    uint8_t cmd[5];
+    cmd[0] = addr; cmd[1] = 0x93; cmd[2] = 0x88;
+    cmd[3] = svF; cmd[4] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 5);
 }
 
 /**
@@ -309,32 +238,28 @@ void Emm_V5_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t
                                   uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, 
                                   uint16_t sl_ma, uint16_t sl_ms, bool potF)
 {
-    uint8_t cmd[32] = {0};
-    
-    /* 装载命令 */
-    cmd[0]  = addr;                             /* 地址 */
-    cmd[1]  = 0x4C;                             /* 功能码 */
-    cmd[2]  = 0xAE;                             /* 辅助码 */
-    cmd[3]  = svF;                              /* 存储标志 */
-    cmd[4]  = o_mode;                           /* 回零模式 */
-    cmd[5]  = o_dir;                            /* 回零方向 */
-    cmd[6]  = (uint8_t)(o_vel >> 8);            /* 回零速度高8位 */
-    cmd[7]  = (uint8_t)(o_vel >> 0);            /* 回零速度低8位 */
-    cmd[8]  = (uint8_t)(o_tm >> 24);            /* 超时时间bit24-31 */
-    cmd[9]  = (uint8_t)(o_tm >> 16);            /* 超时时间bit16-23 */
-    cmd[10] = (uint8_t)(o_tm >> 8);             /* 超时时间bit8-15 */
-    cmd[11] = (uint8_t)(o_tm >> 0);             /* 超时时间bit0-7 */
-    cmd[12] = (uint8_t)(sl_vel >> 8);           /* 检测转速高8位 */
-    cmd[13] = (uint8_t)(sl_vel >> 0);           /* 检测转速低8位 */
-    cmd[14] = (uint8_t)(sl_ma >> 8);            /* 检测电流高8位 */
-    cmd[15] = (uint8_t)(sl_ma >> 0);            /* 检测电流低8位 */
-    cmd[16] = (uint8_t)(sl_ms >> 8);            /* 检测时间高8位 */
-    cmd[17] = (uint8_t)(sl_ms >> 0);            /* 检测时间低8位 */
-    cmd[18] = potF;                             /* 上电自动回零 */
-    cmd[19] = 0x6B;                             /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 20);
+    uint8_t cmd[20];
+    cmd[0] = addr;
+    cmd[1] = 0x4C;
+    cmd[2] = 0xAE;
+    cmd[3] = svF;
+    cmd[4] = o_mode;
+    cmd[5] = o_dir;
+    cmd[6] = (uint8_t)(o_vel >> 8);
+    cmd[7] = (uint8_t)(o_vel);
+    cmd[8] = (uint8_t)(o_tm >> 24);
+    cmd[9] = (uint8_t)(o_tm >> 16);
+    cmd[10] = (uint8_t)(o_tm >> 8);
+    cmd[11] = (uint8_t)(o_tm);
+    cmd[12] = (uint8_t)(sl_vel >> 8);
+    cmd[13] = (uint8_t)(sl_vel);
+    cmd[14] = (uint8_t)(sl_ma >> 8);
+    cmd[15] = (uint8_t)(sl_ma);
+    cmd[16] = (uint8_t)(sl_ms >> 8);
+    cmd[17] = (uint8_t)(sl_ms);
+    cmd[18] = potF;
+    cmd[19] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 20);
 }
 
 /**
@@ -346,17 +271,10 @@ void Emm_V5_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t
  */
 void Emm_V5_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x9A;                              /* 功能码 */
-    cmd[2] = o_mode;                            /* 回零模式 */
-    cmd[3] = snF;                               /* 多机同步标志 */
-    cmd[4] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 5);
+    uint8_t cmd[5];
+    cmd[0] = addr; cmd[1] = 0x9A; cmd[2] = o_mode;
+    cmd[3] = snF; cmd[4] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 5);
 }
 
 /**
@@ -366,14 +284,7 @@ void Emm_V5_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
  */
 void Emm_V5_Origin_Interrupt(uint8_t addr)
 {
-    uint8_t cmd[16] = {0};
-    
-    /* 装载命令 */
-    cmd[0] = addr;                              /* 地址 */
-    cmd[1] = 0x9C;                              /* 功能码 */
-    cmd[2] = 0x48;                              /* 辅助码 */
-    cmd[3] = 0x6B;                              /* 校验字节 */
-    
-    /* 发送命令 */
-    emm_v5_send_cmd(cmd, 4);
+    uint8_t cmd[4];
+    cmd[0] = addr; cmd[1] = 0x9C; cmd[2] = 0x48; cmd[3] = EMM_V5_CHECKSUM;
+    EMM_V5_SEND_CMD(cmd, 4);
 }

@@ -9,6 +9,7 @@
  ******************************************************************************
  */
 
+#include "app_config.h"      /* 必须先包含以获取MODBUS_MAX_MOTORS */
 #include "modbus_gateway.h"
 #include "modbus_rtu.h"
 #include "modbus_hal.h"
