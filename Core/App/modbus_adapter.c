@@ -74,6 +74,7 @@ static void modbus_cb_motor_sync_motion(uint8_t addr)
 
 /**
  * @brief   读取电机状态回调（可选）
+ * @note    V3.5 Phase 4: 暂时返回-1，实际状态由轮询机制更新
  */
 static int modbus_cb_motor_read_status(uint8_t addr, uint32_t *position, uint16_t *speed)
 {
@@ -82,6 +83,22 @@ static int modbus_cb_motor_read_status(uint8_t addr, uint32_t *position, uint16_
     (void)position;
     (void)speed;
     return -1;  /* 暂未实现 */
+}
+
+/**
+ * @brief   电机回零回调（V3.5 Phase 4新增）
+ */
+static void modbus_cb_motor_home(uint8_t addr, uint8_t mode, bool sync)
+{
+    Emm_V5_Origin_Trigger_Return(addr, mode, sync);
+}
+
+/**
+ * @brief   解除保护回调（V3.5 Phase 4新增）
+ */
+static void modbus_cb_motor_release(uint8_t addr)
+{
+    Emm_V5_Reset_Clog_Pro(addr);
 }
 
 /* ======================== 公共函数 ======================== */
@@ -102,6 +119,8 @@ int modbus_adapter_init(void)
         .motor_reset_position = modbus_cb_motor_reset_position,
         .motor_sync_motion = modbus_cb_motor_sync_motion,
         .motor_read_status = modbus_cb_motor_read_status,
+        .motor_home = modbus_cb_motor_home,          /* V3.5 Phase 4 */
+        .motor_release = modbus_cb_motor_release,    /* V3.5 Phase 4 */
     };
     
     /* 注册到Modbus模块 */

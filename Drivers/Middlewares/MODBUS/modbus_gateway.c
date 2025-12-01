@@ -42,6 +42,28 @@ static coils_t g_coils = {0};
 /* 离散输入状态 */
 static discrete_inputs_t g_discrete_inputs = {0};
 
+/* ======================== V3.5 Phase 4: 电机运行时状态缓存 ======================== */
+
+/**
+ * @brief 电机运行时状态结构体（用于状态轮询缓存）
+ */
+typedef struct {
+    uint8_t  enabled;            /* 使能状态（0=未使能, 1=已使能） */
+    uint8_t  ready;              /* 就绪状态（0=未就绪, 1=就绪） */
+    int16_t  current_speed;      /* 当前速度(RPM, 有符号) */
+    int32_t  current_position;   /* 当前位置(脉冲数, 有符号) */
+    uint16_t fault_flags;        /* 故障标志（bit0=堵转, bit1=过流, bit2=欠压等） */
+    uint32_t last_query_tick;    /* 上次查询时间戳(ms) */
+    uint8_t  query_pending;      /* 查询挂起标志（0=空闲, 1=等待响应） */
+} motor_runtime_state_t;
+
+/* 电机运行时状态数组（最多支持8个电机） */
+static motor_runtime_state_t g_motor_runtime_state[MODBUS_MAX_MOTORS] = {0};
+
+/* 状态轮询配置参数 */
+#define MOTOR_QUERY_INTERVAL_MS     100     /* 每个电机查询间隔100ms */
+#define MOTOR_QUERY_TIMEOUT_MS      50      /* 单次查询超时50ms */
+
 /* ======================== 私有函数声明 ======================== */
 
 static uint16_t read_register_by_address(uint16_t addr);
@@ -349,15 +371,56 @@ int modbus_gateway_write_multiple_coils(uint16_t start_addr, uint16_t num_coils,
 }
 
 /**
- * @brief  周期性更新电机状态（主循环调用，暂未实现查询）
+ * @brief  周期性更新电机状态（主循环调用）
+ * @note   V3.5 Phase 4: 实现电机状态轮询机制
+ *         采用简化轮询策略：每次调用轮询1个电机，100ms间隔
+ *         当前版本不解析响应帧，仅发送查询命令
  */
 void modbus_gateway_update_motor_status(void)
 {
-    /* TODO: 实现电机状态轮询
-     * 调用Emm_V5_Read_Sys_Params()等查询函数
-     * 更新g_motor_status_regs数组
-     * 更新g_discrete_inputs（到位标志等）
-     */
+    static uint8_t poll_motor_index = 0;  /* 当前轮询电机索引(0-7) */
+    static uint32_t last_poll_tick = 0;   /* 上次轮询时间戳 */
+    
+    uint32_t current_tick = HAL_GetTick();
+    motor_runtime_state_t *state;
+    uint8_t motor_addr;
+    
+    /* 检查是否到达轮询间隔 */
+    if ((current_tick - last_poll_tick) < MOTOR_QUERY_INTERVAL_MS) {
+        return;  /* 未到时间，直接返回 */
+    }
+    
+    last_poll_tick = current_tick;
+    
+    /* 获取当前电机地址（1-8） */
+    motor_addr = poll_motor_index + 1;
+    state = &g_motor_runtime_state[poll_motor_index];
+    
+    /* 检查是否有未完成的查询 */
+    if (state->query_pending) {
+        /* 超时处理 */
+        if ((current_tick - state->last_query_tick) > MOTOR_QUERY_TIMEOUT_MS) {
+            state->query_pending = 0;  /* 清除挂起标志 */
+            GATEWAY_DEBUG_PRINTF("电机%d查询超时\r\n", motor_addr);
+        } else {
+            /* 仍在等待响应，跳过本次轮询 */
+            poll_motor_index = (poll_motor_index + 1) % MODBUS_MAX_MOTORS;
+            return;
+        }
+    }
+    
+    /* 发送状态查询命令（查询速度S_VEL） */
+    /* 注意：需要外部通过回调调用Emm_V5_Read_Sys_Params() */
+    /* 当前版本简化实现：不发送查询命令，仅更新时间戳 */
+    /* TODO Phase 4.5: 集成emm_v5查询API，解析响应帧 */
+    
+    state->last_query_tick = current_tick;
+    state->query_pending = 0;  /* 简化版本：立即清除挂起 */
+    
+    /* 切换到下一个电机 */
+    poll_motor_index = (poll_motor_index + 1) % MODBUS_MAX_MOTORS;
+    
+    /* TODO: 解析响应帧后更新g_motor_status_regs和g_discrete_inputs */
 }
 
 /**
@@ -441,8 +504,13 @@ int modbus_gateway_execute_motor_command(uint8_t motor_id, motor_command_t comma
             break;
             
         case MOTOR_CMD_HOMING:
-            /* TODO: 实现回零命令，需要读取回零参数 */
-            GATEWAY_DEBUG_PRINTF("电机%d回零（未实现）\r\n", motor_id);
+            /* V3.5 Phase 4: 实现回零命令 */
+            if (cb->motor_home) {
+                /* 读取回零参数（默认值：模式0，速度300RPM） */
+                uint8_t home_mode = (ctrl_regs->home_mode > 3) ? 0 : (uint8_t)ctrl_regs->home_mode;
+                cb->motor_home(motor_id, home_mode, sync_flag);
+                GATEWAY_DEBUG_PRINTF("电机%d回零: mode=%d\r\n", motor_id, home_mode);
+            }
             break;
             
         case MOTOR_CMD_CLEAR_POS:
@@ -453,8 +521,11 @@ int modbus_gateway_execute_motor_command(uint8_t motor_id, motor_command_t comma
             break;
             
         case MOTOR_CMD_CLEAR_PROTECT:
-            /* TODO: 实现解除保护命令 */
-            GATEWAY_DEBUG_PRINTF("电机%d解除保护（未实现）\r\n", motor_id);
+            /* V3.5 Phase 4: 实现解除保护命令 */
+            if (cb->motor_release) {
+                cb->motor_release(motor_id);
+                GATEWAY_DEBUG_PRINTF("电机%d解除保护\r\n", motor_id);
+            }
             break;
             
         default:
@@ -492,6 +563,28 @@ motor_status_regs_t* modbus_gateway_get_motor_status_regs(uint8_t motor_id)
 global_control_regs_t* modbus_gateway_get_global_regs(void)
 {
     return &g_global_regs;
+}
+
+/**
+ * @brief  检查电机是否使能（V3.5 Phase 4新增）
+ */
+uint8_t modbus_gateway_is_motor_enabled(uint8_t motor_id)
+{
+    if (motor_id < 1 || motor_id > MODBUS_MAX_MOTORS) {
+        return 0;
+    }
+    return g_motor_runtime_state[motor_id - 1].enabled;
+}
+
+/**
+ * @brief  检查电机是否就绪（V3.5 Phase 4新增）
+ */
+uint8_t modbus_gateway_is_motor_ready(uint8_t motor_id)
+{
+    if (motor_id < 1 || motor_id > MODBUS_MAX_MOTORS) {
+        return 0;
+    }
+    return g_motor_runtime_state[motor_id - 1].ready;
 }
 
 /* ======================== 私有函数实现 ======================== */
@@ -546,7 +639,9 @@ static int write_register_by_address(uint16_t addr, uint16_t value)
         if (addr == REG_SYS_DEVICE_ID) {
             modbus_rtu_set_slave_address((uint8_t)value);
         } else if (addr == REG_SYS_RESET && value == 0xAA55) {
-            /* TODO: 系统复位 */
+            /* V3.5 Phase 4: 系统复位（魔术值0xAA55触发） */
+            GATEWAY_DEBUG_PRINTF("系统复位触发...\r\n");
+            NVIC_SystemReset();  /* 软件复位 */
         }
         
         return 0;

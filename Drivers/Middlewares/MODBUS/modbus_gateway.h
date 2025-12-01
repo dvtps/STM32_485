@@ -66,6 +66,9 @@
 #define MOTOR_REG_SYNC_FLAG             9       /* 同步标志 */
 #define MOTOR_REG_MOTION_TYPE           10      /* 运动类型 */
 #define MOTOR_REG_CURRENT_LIMIT         11      /* 电流限制(mA) */
+#define MOTOR_REG_HOME_MODE             12      /* 回零模式(0-3) V3.5 Phase 4 */
+#define MOTOR_REG_HOME_SPEED            13      /* 回零速度(RPM) V3.5 Phase 4 */
+#define MOTOR_REG_HOME_TIMEOUT          14      /* 回零超时(ms) V3.5 Phase 4 */
 
 /* 电机状态区（0x0500-0x08FF, 16电机×64寄存器，只读） */
 #define MODBUS_REG_MOTOR_STATUS_BASE    0x0500
@@ -138,8 +141,11 @@ typedef struct {
     uint16_t sync_flag;             /* 同步标志 */
     uint16_t motion_type;           /* 运动类型 */
     uint16_t current_limit;         /* 电流限制 */
+    uint16_t home_mode;             /* 回零模式(0-3) V3.5 Phase 4 */
+    uint16_t home_speed;            /* 回零速度(RPM) V3.5 Phase 4 */
+    uint16_t home_timeout;          /* 回零超时(ms) V3.5 Phase 4 */
     /* 更多参数... */
-    uint16_t reserved[52];          /* 预留空间（共64寄存器） */
+    uint16_t reserved[49];          /* 预留空间（共64寄存器） */
 } motor_control_regs_t;
 
 /**
@@ -310,6 +316,20 @@ motor_status_regs_t* modbus_gateway_get_motor_status_regs(uint8_t motor_id);
  * @retval 寄存器指针
  */
 global_control_regs_t* modbus_gateway_get_global_regs(void);
+
+/**
+ * @brief  检查电机是否使能（V3.5 Phase 4新增）
+ * @param  motor_id: 电机ID（1-16）
+ * @retval 1=使能, 0=失能或参数错误
+ */
+uint8_t modbus_gateway_is_motor_enabled(uint8_t motor_id);
+
+/**
+ * @brief  检查电机是否就绪（V3.5 Phase 4新增）
+ * @param  motor_id: 电机ID（1-16）
+ * @retval 1=就绪, 0=未就绪或参数错误
+ */
+uint8_t modbus_gateway_is_motor_ready(uint8_t motor_id);
 
 /* ======================== 调试宏定义 ======================== */
 

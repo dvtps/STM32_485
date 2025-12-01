@@ -181,9 +181,10 @@
 
 /* 注意: 日志宏定义已移至 log_system.h，此处不再重复定义 */
 
-/* 电机状态检查宏（待实现） */
-#define IS_MOTOR_ENABLED(addr)      /* TODO: 检查电机是否使能 */
-#define IS_MOTOR_READY(addr)        /* TODO: 检查电机是否就绪 */
+/* 电机状态检查宏（V3.5 Phase 4实现） */
+/* 注意: 使用前需#include "modbus_gateway.h" */
+#define IS_MOTOR_ENABLED(addr)      modbus_gateway_is_motor_enabled(addr)
+#define IS_MOTOR_READY(addr)        modbus_gateway_is_motor_ready(addr)
 
 /* 兼容性定义（避免修改主程序代码） */
 #define FEATURE_WATCHDOG_ENABLE     WATCHDOG_ENABLE

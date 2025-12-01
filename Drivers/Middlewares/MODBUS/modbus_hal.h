@@ -53,6 +53,12 @@ typedef struct {
     /* 读取电机状态（可选，用于状态轮询） */
     int (*motor_read_status)(uint8_t addr, uint32_t *position, uint16_t *speed);
     
+    /* 回零控制（V3.5 Phase 4新增） */
+    void (*motor_home)(uint8_t addr, uint8_t mode, bool sync);
+    
+    /* 解除保护（V3.5 Phase 4新增） */
+    void (*motor_release)(uint8_t addr);
+    
 } modbus_motor_callbacks_t;
 
 /* ======================== UART/延时回调接口 ======================== */
