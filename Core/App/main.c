@@ -63,7 +63,7 @@ int main(void)
     
 #if FEATURE_MODBUS_ENABLE
     modbus_adapter_init();      /* Modbus回调适配器初始化 */
-    multi_motor_init();         /* V3.1: 多电机管理器初始化 */
+    motor_mgr_init();           /* V3.5 Phase 2: 多电机管理器初始化 */
     if (modbus_task_init() == 0) {
         printf("Modbus RTU initialized: Address=%d, Baudrate=%d\r\n", 
                MODBUS_SLAVE_ADDRESS, MODBUS_BAUDRATE);
@@ -87,6 +87,14 @@ int main(void)
 
     /* 等待电机上电稳定 */
     HAL_Delay(100);
+    
+    /* V3.5 Phase 3: 自动发现电机 */
+#if FEATURE_MODBUS_ENABLE
+    printf("[MotorMgr] Scanning motors (1-8)...\r\n");
+    uint8_t found_count = motor_mgr_scan(1, 8);
+    printf("[MotorMgr] Found %d motor(s)\r\n", found_count);
+    motor_mgr_print_all_status();
+#endif
     
     /* ============ 第三阶段：主循环任务调度 ============ */
     /* V3.5优化: 非阻塞定时器替代HAL_Delay，提升响应速度95% */
@@ -159,17 +167,33 @@ int main(void)
             comm_check_timeout();
         }
         
-        /* 任务4.5：内存泄漏检测（V3.5 Phase 1新增，1秒周期） */
-        static uint32_t last_leak_check = 0;
-        if (HAL_GetTick() - last_leak_check >= 1000) {
-            last_leak_check = HAL_GetTick();
-            uint32_t leak_count = mem_pool_check_leaks(last_leak_check);
-            if (leak_count > 0) {
-                printf("[WARNING] Memory leak detected: %lu blocks\r\n", (unsigned long)leak_count);
-            }
+    /* 任务4.5：内存泄漏检测（V3.5 Phase 1新增，1秒周期） */
+    static uint32_t last_leak_check = 0;
+    if (HAL_GetTick() - last_leak_check >= 1000) {
+        last_leak_check = HAL_GetTick();
+        uint32_t leak_count = mem_pool_check_leaks(last_leak_check);
+        if (leak_count > 0) {
+            printf("[WARNING] Memory leak detected: %lu blocks\r\n", (unsigned long)leak_count);
         }
-        
-        /* 任务5：看门狗喂狗（低优先级，每次循环执行） */
+    }
+    
+    /* 任务4.6：多电机状态更新（V3.5 Phase 3新增，100ms周期） */
+#if FEATURE_MODBUS_ENABLE
+    static uint32_t last_motor_update = 0;
+    if (HAL_GetTick() - last_motor_update >= 100) {
+        last_motor_update = HAL_GetTick();
+        motor_mgr_update_all_status();
+    }
+#endif
+    
+    /* 任务4.7：多电机自动恢复（V3.5 Phase 3新增，30秒周期） */
+#if FEATURE_MODBUS_ENABLE
+    static uint32_t last_auto_recover = 0;
+    if (HAL_GetTick() - last_auto_recover >= 30000) {
+        last_auto_recover = HAL_GetTick();
+        motor_mgr_auto_recover();
+    }
+#endif        /* 任务5：看门狗喂狗（低优先级，每次循环执行） */
 #ifdef FEATURE_WATCHDOG_ENABLE
         iwdg_feed();
 #endif

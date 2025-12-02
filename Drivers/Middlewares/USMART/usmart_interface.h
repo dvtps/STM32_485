@@ -73,6 +73,21 @@ void mem_stats(void);                                  /* 内存池统计信息 
 void mem_check_leaks(void);                            /* 检查内存泄漏 */
 void mem_reset_stats(uint8_t type);                    /* 重置统计计数器 */
 
+/* ============ V3.5 Phase 3: 多电机管理器调试接口 ============ */
+
+void mgr_scan(uint8_t start, uint8_t end);            /* 扫描电机（motor_mgr版本） */
+void mgr_list(void);                                   /* 列出所有电机状态 */
+void mgr_info(uint8_t addr);                          /* 显示单个电机详细信息 */
+void mgr_enable(uint8_t addr, uint8_t enable);        /* 使能/失能电机 */
+void mgr_move(uint8_t addr, uint8_t dir, uint16_t speed, uint32_t pulses);  /* 位置控制 */
+void mgr_stop(uint8_t addr);                          /* 急停电机 */
+void mgr_stop_all(void);                              /* 全体急停 */
+void mgr_health(uint8_t addr);                        /* 查询健康度 */
+void mgr_recover(void);                               /* 手动触发自动恢复 */
+void mgr_query_pos(uint8_t addr);                     /* 查询位置 */
+void mgr_query_vel(uint8_t addr);                     /* 查询速度 */
+void mgr_query_vbus(uint8_t addr);                    /* 查询电压 */
+
 /* 硬件测试函数 */
 void mem_test_stress(uint16_t count);                  /* 压力测试：循环分配释放 */
 void mem_test_leak(uint8_t block_count);               /* 泄漏测试：故意不释放 */

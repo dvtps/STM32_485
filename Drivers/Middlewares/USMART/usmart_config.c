@@ -79,6 +79,20 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)mem_test_leak, "void mem_test_leak(uint8_t block_count)"},
     {(void *)mem_test_concurrent, "void mem_test_concurrent(void)"},
     
+    /* V3.5 Phase 3: 多电机管理器调试命令 */
+    {(void *)mgr_scan, "void mgr_scan(uint8_t start,uint8_t end)"},
+    {(void *)mgr_list, "void mgr_list(void)"},
+    {(void *)mgr_info, "void mgr_info(uint8_t addr)"},
+    {(void *)mgr_enable, "void mgr_enable(uint8_t addr,uint8_t enable)"},
+    {(void *)mgr_move, "void mgr_move(uint8_t addr,uint8_t dir,uint16_t speed,uint32_t pulses)"},
+    {(void *)mgr_stop, "void mgr_stop(uint8_t addr)"},
+    {(void *)mgr_stop_all, "void mgr_stop_all(void)"},
+    {(void *)mgr_health, "void mgr_health(uint8_t addr)"},
+    {(void *)mgr_recover, "void mgr_recover(void)"},
+    {(void *)mgr_query_pos, "void mgr_query_pos(uint8_t addr)"},
+    {(void *)mgr_query_vel, "void mgr_query_vel(uint8_t addr)"},
+    {(void *)mgr_query_vbus, "void mgr_query_vbus(uint8_t addr)"},
+    
     /* RS485硬件测试 - 已验证IDLE中断正常，暂时注释调试工具 */
     // {(void *)rs485_loopback_test, "void rs485_loopback_test(void)"},
     // {(void *)rs485_debug_status, "void rs485_debug_status(void)"},

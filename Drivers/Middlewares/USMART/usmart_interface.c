@@ -414,3 +414,119 @@ void mem_test_concurrent(void)
     /* 显示统计 */
     mem_pool_print_stats();
 }
+
+/* ============ V3.5 Phase 3: 多电机管理器调试接口 ============ */
+
+void mgr_scan(uint8_t start, uint8_t end)
+{
+    printf("[MotorMgr] Scanning motors (%d-%d)...\r\n", start, end);
+    uint8_t found = motor_mgr_scan(start, end);
+    printf("[MotorMgr] Found %d motor(s)\r\n", found);
+    motor_mgr_print_all_status();
+}
+
+void mgr_list(void)
+{
+    motor_mgr_print_all_status();
+}
+
+void mgr_info(uint8_t addr)
+{
+    motor_state_t *state = motor_mgr_find(addr);
+    if (state) {
+        motor_mgr_print_status(addr);
+    } else {
+        printf("[MotorMgr] Motor #%d not found\r\n", addr);
+    }
+}
+
+void mgr_enable(uint8_t addr, uint8_t enable)
+{
+    if (motor_mgr_enable(addr, enable ? true : false) == HAL_OK) {
+        printf("[MotorMgr] Motor #%d %s\r\n", addr, enable ? "ENABLED" : "DISABLED");
+    } else {
+        printf("[MotorMgr] Failed to control motor #%d\r\n", addr);
+    }
+}
+
+void mgr_move(uint8_t addr, uint8_t dir, uint16_t speed, uint32_t pulses)
+{
+    if (motor_mgr_move(addr, dir, speed, 10, pulses, false) == HAL_OK) {
+        printf("[MotorMgr] Motor #%d: dir=%d speed=%d pulses=%lu\r\n", 
+               addr, dir, speed, (unsigned long)pulses);
+    } else {
+        printf("[MotorMgr] Failed to move motor #%d\r\n", addr);
+    }
+}
+
+void mgr_stop(uint8_t addr)
+{
+    if (motor_mgr_stop(addr) == HAL_OK) {
+        printf("[MotorMgr] Motor #%d STOPPED\r\n", addr);
+    } else {
+        printf("[MotorMgr] Failed to stop motor #%d\r\n", addr);
+    }
+}
+
+void mgr_stop_all(void)
+{
+    uint8_t count = motor_mgr_stop_all();
+    printf("[MotorMgr] Stopped %d motor(s)\r\n", count);
+}
+
+void mgr_health(uint8_t addr)
+{
+    uint8_t health = motor_mgr_get_health(addr);
+    motor_state_t *state = motor_mgr_find(addr);
+    if (state) {
+        printf("[MotorMgr] Motor #%d: Health=%d, Online=%s\r\n", 
+               addr, health, state->online == MOTOR_STATUS_ONLINE ? "YES" : "NO");
+    } else {
+        printf("[MotorMgr] Motor #%d not found\r\n", addr);
+    }
+}
+
+void mgr_recover(void)
+{
+    printf("[MotorMgr] Triggering auto-recovery...\r\n");
+    motor_mgr_auto_recover();
+}
+
+void mgr_query_pos(uint8_t addr)
+{
+    if (motor_mgr_query_position(addr) == HAL_OK) {
+        HAL_Delay(100);  // 等待响应
+        motor_state_t *state = motor_mgr_find(addr);
+        if (state) {
+            printf("[MotorMgr] Motor #%d: Position=%ld\r\n", addr, (long)state->position);
+        }
+    } else {
+        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
+    }
+}
+
+void mgr_query_vel(uint8_t addr)
+{
+    if (motor_mgr_query_velocity(addr) == HAL_OK) {
+        HAL_Delay(100);  // 等待响应
+        motor_state_t *state = motor_mgr_find(addr);
+        if (state) {
+            printf("[MotorMgr] Motor #%d: Velocity=%d RPM\r\n", addr, state->velocity);
+        }
+    } else {
+        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
+    }
+}
+
+void mgr_query_vbus(uint8_t addr)
+{
+    if (motor_mgr_query_vbus(addr) == HAL_OK) {
+        HAL_Delay(100);  // 等待响应
+        motor_state_t *state = motor_mgr_find(addr);
+        if (state) {
+            printf("[MotorMgr] Motor #%d: Vbus=%u mV\r\n", addr, state->vbus);
+        }
+    } else {
+        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
+    }
+}
