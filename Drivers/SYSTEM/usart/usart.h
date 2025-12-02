@@ -108,4 +108,14 @@ void usart1_set_mode(usart1_mode_t mode);               /* 设置USART1工作模
 usart1_mode_t usart1_get_mode(void);                    /* 获取当前工作模式 */
 void usart1_flush_rx_buffer(void);                      /* 清空接收缓冲区 */
 
+/* USART2统计与调试函数 */
+uint32_t get_idle_interrupt_count(void);                /* 获取IDLE中断计数 */
+uint32_t get_fifo_overflow_count(void);                 /* 获取FIFO溢出计数 */
+
+/* V3.5 Phase 8 P1优化: 增量CRC校验函数 */
+void reset_incremental_crc(void);                       /* 重置增量CRC状态 */
+uint16_t get_incremental_crc(void);                     /* 获取当前累积的CRC值 */
+uint16_t get_crc_byte_count(void);                      /* 获取已计算的字节数 */
+uint32_t get_crc_calc_count(void);                      /* 获取CRC计算帧数统计 */
+
 #endif

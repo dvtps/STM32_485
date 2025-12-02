@@ -57,4 +57,9 @@ void multi_home(uint16_t mask, uint8_t mode);         /* 批量回零 */
 void proto_stats(void);                                /* 显示协议统计 */
 void proto_reset(void);                                /* 重置统计 */
 
+/* ============ V3.5 Phase 8 P1: 增量CRC调试接口 ============ */
+
+void crc_stats(void);                                  /* CRC统计信息 */
+void fifo_stats(void);                                 /* FIFO统计信息 */
+
 #endif /* __USMART_INTERFACE_H */

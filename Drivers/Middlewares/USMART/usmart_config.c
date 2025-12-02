@@ -61,6 +61,10 @@ struct _m_usmart_nametab usmart_nametab[] =
     /* V3.1: 协议统计模块 */
     {(void *)proto_stats, "void proto_stats(void)"},
     {(void *)proto_reset, "void proto_reset(void)"},
+    
+    /* V3.5 Phase 8 P1: 增量CRC调试模块 */
+    {(void *)crc_stats, "void crc_stats(void)"},
+    {(void *)fifo_stats, "void fifo_stats(void)"},
 };
 
 /******************************************************************************************/
