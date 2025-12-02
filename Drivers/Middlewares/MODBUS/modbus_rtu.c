@@ -4,10 +4,14 @@
  * @author  STM32_485 Project
  * @version V1.0
  * @date    2025-12-01
- * @brief   Modbus RTU协议解析器实现
- *          提供完整的Modbus RTU协议栈底层支持
+ * @brief   Modbus RTU协议栈实现
+ *          实现Modbus RTU核心协议解析、响应构造、CRC校验
  ******************************************************************************
  */
+
+#include "app_config.h"
+
+#if FEATURE_MODBUS_ENABLE
 
 #include "modbus_rtu.h"
 #include "modbus_gateway.h"
@@ -269,7 +273,7 @@ int modbus_rtu_process_request(const uint8_t *rx_buffer, uint16_t rx_len,
     
     /* 广播地址不响应 */
     if (req_frame.slave_addr == 0) {
-        MODBUS_DEBUG_PRINTF("广播请求，不响应\r\n");
+        MODBUS_DEBUG_PRINTF("%s\r\n", "广播请求，不响应");
         return -1;
     }
     
@@ -725,3 +729,5 @@ static int modbus_rtu_handle_write_multiple_coils(const modbus_rtu_frame_t *req,
     
     return 0;
 }
+
+#endif /* FEATURE_MODBUS_ENABLE */

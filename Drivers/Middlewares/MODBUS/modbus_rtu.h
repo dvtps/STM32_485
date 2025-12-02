@@ -211,9 +211,11 @@ uint8_t modbus_rtu_get_slave_address(void);
 /* ======================== 调试宏定义 ======================== */
 
 #if !defined(NDEBUG) && defined(DEBUG_ENABLE) && (DEBUG_ENABLE == 1)
-    #define MODBUS_DEBUG_PRINTF(fmt, ...)   printf("[MODBUS] " fmt, ##__VA_ARGS__)
+    #define MODBUS_DEBUG_PRINTF(fmt, ...) \
+        do { printf("[MODBUS] " fmt, ##__VA_ARGS__); } while(0)
 #else
-    #define MODBUS_DEBUG_PRINTF(fmt, ...)   ((void)0)  /* Release: 移除所有printf调用 */
+    #define MODBUS_DEBUG_PRINTF(fmt, ...) \
+        do { (void)(fmt); } while(0)  /* Release: 移除所有printf调用，保留fmt以避免未使用警告 */
 #endif
 
 #endif /* __MODBUS_RTU_H */

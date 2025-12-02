@@ -205,6 +205,9 @@ void usart1_init(uint32_t baudrate)
     /* 开启USART1接收中断（RXNE + IDLE双中断） */
     __HAL_UART_ENABLE_IT(&g_uart1_handle, UART_IT_RXNE);
     __HAL_UART_ENABLE_IT(&g_uart1_handle, UART_IT_IDLE);
+    
+    /* 启动首次接收（必须调用，否则中断不会触发！） */
+    HAL_UART_Receive_IT(&g_uart1_handle, g_usart1_rx_buffer, 1);
 #endif
 }
 
@@ -369,11 +372,12 @@ static void usart1_rx_callback(UART_HandleTypeDef *huart)
         {
             if (g_usart1_rx_buffer[0] != 0x0a)          /* 不是0x0a（换行键） */
             {
-                g_usart1_rx_sta = 0;                    /* 接收错误,重新开始 */
+                /* 兼容只发送\r的情况（USMART常见） */
+                g_usart1_rx_sta |= 0x8000;              /* 直接标记接收完成 */
             }
             else
             {
-                g_usart1_rx_sta |= 0x8000;              /* 接收完成 */
+                g_usart1_rx_sta |= 0x8000;              /* 接收完成（标准\r\n） */
             }
         }
         else                                            /* 还没收到0x0d */
@@ -418,8 +422,12 @@ static void usart2_idle_callback(UART_HandleTypeDef *huart)
 {
     idle_count++;  /* 调试：记录IDLE中断次数 */
     
-    /* 清除IDLE标志 */
-    __HAL_UART_CLEAR_IDLEFLAG(huart);
+    /* STM32F1清除IDLE标志的正确方法：
+     * 1. 读SR寄存器（在中断处理前已读取isrflags）
+     * 2. 读DR寄存器（清除IDLE标志）
+     * 注意：这里的DR读取不会丢失数据，因为RXNE已在前面处理完
+     */
+    (void)huart->Instance->DR;  /* 读DR以清除IDLE标志 */
     
 #if ENABLE_INCREMENTAL_CRC
     /* P1优化: IDLE中断表示一帧接收完成，统计CRC计算次数 */
@@ -608,10 +616,14 @@ void USART2_IRQHandler(void)
         usart2_idle_dma_handler(&g_uart2_handle);
     }
 #else
-    /* 传统模式: RXNE + IDLE中断 */
+    /* 传统模式: RXNE + IDLE中断
+     * 关键修复: 先检查IDLE标志，因为读DR会自动清除IDLE标志
+     */
+    uint32_t isrflags = g_uart2_handle.Instance->SR;  /* 一次性读取所有标志 */
     uint8_t data;
     
-    if (__HAL_UART_GET_FLAG(&g_uart2_handle, UART_FLAG_RXNE) != RESET)
+    /* 处理RXNE中断 */
+    if ((isrflags & UART_FLAG_RXNE) != 0)
     {
         data = (uint8_t)(g_uart2_handle.Instance->DR & 0xFF);
         if (emm_fifo_enqueue((uint16_t)data) != 0)
@@ -631,10 +643,10 @@ void USART2_IRQHandler(void)
             g_crc_byte_count++;
 #endif
         }
-        __HAL_UART_CLEAR_FLAG(&g_uart2_handle, UART_FLAG_RXNE);
     }
     
-    if (__HAL_UART_GET_FLAG(&g_uart2_handle, UART_FLAG_IDLE) != RESET)
+    /* 处理IDLE中断（必须在读DR之后检查保存的标志） */
+    if ((isrflags & UART_FLAG_IDLE) != 0)
     {
         usart2_idle_callback(&g_uart2_handle);
     }

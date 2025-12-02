@@ -90,7 +90,7 @@
  *   → Gateway: Modbus寄存器 → 电机命令映射 - App层
  */
 
-#define FEATURE_MODBUS_ENABLE       1           /* 1=启用Modbus RTU功能, 0=禁用 */
+#define FEATURE_MODBUS_ENABLE       0           /* 1=启用Modbus RTU功能, 0=禁用 (临时禁用，测试Emm_V5通信) */
 
 /* USMART串口调试工具 (Release构建可禁用以减少Flash占用) */
 #ifdef NDEBUG

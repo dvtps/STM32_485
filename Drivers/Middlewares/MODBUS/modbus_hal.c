@@ -8,6 +8,10 @@
  ******************************************************************************
  */
 
+#include "app_config.h"
+
+#if FEATURE_MODBUS_ENABLE
+
 #include "modbus_hal.h"
 #include <string.h>
 
@@ -54,3 +58,5 @@ const modbus_motor_callbacks_t* modbus_get_motor_callbacks(void)
 {
     return &g_motor_callbacks;
 }
+
+#endif /* FEATURE_MODBUS_ENABLE */

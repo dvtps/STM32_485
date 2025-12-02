@@ -347,7 +347,7 @@ void multi_motor_print_list(void)
                    motor->modbus_addr,
                    motor->physical_addr,
                    state_str[motor->state],
-                   motor->current_position,
+                   (long)motor->current_position,
                    motor->current_speed);
         }
     }

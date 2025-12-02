@@ -118,10 +118,11 @@ bool protocol_is_emm_v5(const uint8_t *data, uint16_t len)
     uint8_t addr = data[1];
     (void)addr;  /* 地址范围已在0x00-0xFF内 */
     
-    /* 命令码检查：Emm_V5命令码通常高字节为0xF* */
+    /* 命令码检查：Emm_V5控制命令 + 查询响应命令 */
     uint8_t cmd = data[2];
-    if (cmd == 0xF3 || cmd == 0xF6 || cmd == 0xFD || cmd == 0xFF || 
-        cmd == 0xF0 || cmd == 0xE6 || cmd == 0xE7 || cmd == 0xE8) {
+    if (cmd == 0xF3 || cmd == 0xF6 || cmd == 0xFD || cmd == 0xFF ||  /* 控制命令 */
+        cmd == 0xF0 || cmd == 0xE6 || cmd == 0xE7 || cmd == 0xE8 ||  /* 使能/保存命令 */
+        cmd == 0x3A || cmd == 0x36 || cmd == 0x35 || cmd == 0x24) {  /* 查询响应命令 */
         
         /* 简单校验和验证（Emm_V5使用最后一字节作为校验） */
         uint8_t checksum = 0;
@@ -182,10 +183,12 @@ protocol_type_t protocol_router_process(const uint8_t *data, uint16_t len)
         }
         
         /* V3.5 Phase 5: 处理电机查询响应（调用modbus_gateway解析） */
+#if FEATURE_MODBUS_ENABLE
         extern void modbus_gateway_handle_motor_response(uint8_t motor_addr, const uint8_t *data, uint16_t len);
         if (len >= 4 && data[0] >= 1 && data[0] <= 8) {
             modbus_gateway_handle_motor_response(data[0], data, len);
         }
+#endif
         
         g_router_stats.emm_v5_frames++;
         return PROTOCOL_EMM_V5;

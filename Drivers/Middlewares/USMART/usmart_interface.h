@@ -36,7 +36,12 @@ void motor_pos_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc, uint
 void motor_vel_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc);
 void motor_stop(uint8_t addr);
 void motor_home(uint8_t addr);
-void motor_read_status(uint8_t addr);
+
+/* 单电机查询（V3.5增强） */
+void motor_read_status(uint8_t addr);    /* 读取状态标志 */
+void motor_read_pos(uint8_t addr);       /* 读取当前位置 */
+void motor_read_vel(uint8_t addr);       /* 读取当前速度 */
+void motor_read_vbus(uint8_t addr);      /* 读取总线电压 */
 
 /* ============ V3.1新增：多电机管理接口 ============ */
 
@@ -72,5 +77,13 @@ void mem_reset_stats(uint8_t type);                    /* 重置统计计数器 
 void mem_test_stress(uint16_t count);                  /* 压力测试：循环分配释放 */
 void mem_test_leak(uint8_t block_count);               /* 泄漏测试：故意不释放 */
 void mem_test_concurrent(void);                        /* 并发测试：分配至池满 */
+
+/* RS485硬件测试 */
+void rs485_loopback_test(void);                        /* RS485回环测试：验证收发通路 */
+void rs485_debug_status(void);                         /* RS485调试：显示中断/FIFO状态 */
+void rs485_rxne_test(void);                            /* RXNE中断测试：单字节收发 */
+void rs485_nvic_test(void);                            /* NVIC配置检查 */
+void rs485_polling_test(void);                         /* 轮询模式测试：不依赖中断 */
+void rs485_motor_response_test(void);                  /* 电机响应测试：检查IDLE中断 */
 
 #endif /* __USMART_INTERFACE_H */

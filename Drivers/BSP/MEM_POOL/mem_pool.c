@@ -180,31 +180,31 @@ void mem_pool_print_stats(void)
     printf("[Frame Buffer Pool] (%d x %dB = %dB total)\r\n", 
            MEM_POOL_FRAME_COUNT, MEM_POOL_FRAME_SIZE,
            MEM_POOL_FRAME_COUNT * MEM_POOL_FRAME_SIZE);
-    printf("  Total Allocs:      %lu\r\n", s_frame_ctrl.stats.total_allocs);
-    printf("  Total Frees:       %lu\r\n", s_frame_ctrl.stats.total_frees);
-    printf("  Current Used:      %lu / %d blocks (%d%%)\r\n", 
-           s_frame_ctrl.stats.current_used, MEM_POOL_FRAME_COUNT,
-           (s_frame_ctrl.stats.current_used * 100) / MEM_POOL_FRAME_COUNT);
-    printf("  Peak Used:         %lu blocks\r\n", s_frame_ctrl.stats.peak_used);
-    printf("  Alloc Failures:    %lu\r\n", s_frame_ctrl.stats.alloc_failures);
-    printf("  Invalid Frees:     %lu\r\n", s_frame_ctrl.stats.invalid_frees);
-    printf("  Double Frees:      %lu\r\n", s_frame_ctrl.stats.double_frees);
-    printf("  Leak Warnings:     %lu\r\n", s_frame_ctrl.stats.leak_warnings);
+    printf("  Total Allocs:      %lu\r\n", (unsigned long)s_frame_ctrl.stats.total_allocs);
+    printf("  Total Frees:       %lu\r\n", (unsigned long)s_frame_ctrl.stats.total_frees);
+    printf("  Current Used:      %lu / %d blocks (%lu%%)\r\n", 
+           (unsigned long)s_frame_ctrl.stats.current_used, MEM_POOL_FRAME_COUNT,
+           (unsigned long)(s_frame_ctrl.stats.current_used * 100) / MEM_POOL_FRAME_COUNT);
+    printf("  Peak Used:         %lu blocks\r\n", (unsigned long)s_frame_ctrl.stats.peak_used);
+    printf("  Alloc Failures:    %lu\r\n", (unsigned long)s_frame_ctrl.stats.alloc_failures);
+    printf("  Invalid Frees:     %lu\r\n", (unsigned long)s_frame_ctrl.stats.invalid_frees);
+    printf("  Double Frees:      %lu\r\n", (unsigned long)s_frame_ctrl.stats.double_frees);
+    printf("  Leak Warnings:     %lu\r\n", (unsigned long)s_frame_ctrl.stats.leak_warnings);
     
     /* 电机状态池 */
     printf("\r\n[Motor State Pool] (%d x %dB = %dB total)\r\n", 
            MEM_POOL_MOTOR_STATE_COUNT, MEM_POOL_MOTOR_STATE_SIZE,
            MEM_POOL_MOTOR_STATE_COUNT * MEM_POOL_MOTOR_STATE_SIZE);
-    printf("  Total Allocs:      %lu\r\n", s_motor_state_ctrl.stats.total_allocs);
-    printf("  Total Frees:       %lu\r\n", s_motor_state_ctrl.stats.total_frees);
-    printf("  Current Used:      %lu / %d blocks (%d%%)\r\n", 
-           s_motor_state_ctrl.stats.current_used, MEM_POOL_MOTOR_STATE_COUNT,
-           (s_motor_state_ctrl.stats.current_used * 100) / MEM_POOL_MOTOR_STATE_COUNT);
-    printf("  Peak Used:         %lu blocks\r\n", s_motor_state_ctrl.stats.peak_used);
-    printf("  Alloc Failures:    %lu\r\n", s_motor_state_ctrl.stats.alloc_failures);
-    printf("  Invalid Frees:     %lu\r\n", s_motor_state_ctrl.stats.invalid_frees);
-    printf("  Double Frees:      %lu\r\n", s_motor_state_ctrl.stats.double_frees);
-    printf("  Leak Warnings:     %lu\r\n", s_motor_state_ctrl.stats.leak_warnings);
+    printf("  Total Allocs:      %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.total_allocs);
+    printf("  Total Frees:       %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.total_frees);
+    printf("  Current Used:      %lu / %d blocks (%lu%%)\r\n", 
+           (unsigned long)s_motor_state_ctrl.stats.current_used, MEM_POOL_MOTOR_STATE_COUNT,
+           (unsigned long)(s_motor_state_ctrl.stats.current_used * 100) / MEM_POOL_MOTOR_STATE_COUNT);
+    printf("  Peak Used:         %lu blocks\r\n", (unsigned long)s_motor_state_ctrl.stats.peak_used);
+    printf("  Alloc Failures:    %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.alloc_failures);
+    printf("  Invalid Frees:     %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.invalid_frees);
+    printf("  Double Frees:      %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.double_frees);
+    printf("  Leak Warnings:     %lu\r\n", (unsigned long)s_motor_state_ctrl.stats.leak_warnings);
     
     printf("============================================\r\n\r\n");
 }

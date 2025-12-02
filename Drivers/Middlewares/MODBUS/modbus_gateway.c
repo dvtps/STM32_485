@@ -10,6 +10,8 @@
  */
 
 #include "app_config.h"      /* 必须先包含以获取MODBUS_MAX_MOTORS */
+
+#if FEATURE_MODBUS_ENABLE    /* 仅在启用Modbus功能时编译 */
 #include "modbus_gateway.h"
 #include "modbus_rtu.h"
 #include "modbus_hal.h"
@@ -796,7 +798,7 @@ static uint16_t read_register_by_address(uint16_t addr)
     uint8_t motor_id, offset;
     
     /* 全局控制区（0x0000-0x007F） */
-    if (addr >= MODBUS_REG_GLOBAL_BASE && addr < MODBUS_REG_GLOBAL_BASE + 128) {
+    if (addr < MODBUS_REG_GLOBAL_BASE + 128) {
         reg_ptr = (uint16_t*)&g_global_regs;
         return reg_ptr[addr - MODBUS_REG_GLOBAL_BASE];
     }
@@ -829,7 +831,7 @@ static int write_register_by_address(uint16_t addr, uint16_t value)
     uint8_t motor_id, offset;
     
     /* 全局控制区 */
-    if (addr >= MODBUS_REG_GLOBAL_BASE && addr < MODBUS_REG_GLOBAL_BASE + 128) {
+    if (addr < MODBUS_REG_GLOBAL_BASE + 128) {
         reg_ptr = (uint16_t*)&g_global_regs;
         reg_ptr[addr - MODBUS_REG_GLOBAL_BASE] = value;
         
@@ -876,7 +878,7 @@ static int write_register_by_address(uint16_t addr, uint16_t value)
 static bool is_address_writable(uint16_t addr)
 {
     /* 全局控制区（可写） */
-    if (addr >= MODBUS_REG_GLOBAL_BASE && addr < MODBUS_REG_GLOBAL_BASE + 128) {
+    if (addr < MODBUS_REG_GLOBAL_BASE + 128) {
         /* 固件版本和硬件版本只读 */
         if (addr == REG_SYS_FIRMWARE_VERSION || addr == REG_SYS_HARDWARE_VERSION) {
             return false;
@@ -897,4 +899,4 @@ static bool is_address_writable(uint16_t addr)
     return false;
 }
 
-
+#endif /* FEATURE_MODBUS_ENABLE */

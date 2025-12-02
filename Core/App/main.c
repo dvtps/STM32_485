@@ -59,10 +59,10 @@ int main(void)
     /* ============ 第二阶段：功能模块初始化 ============ */
     emm_uart_init();            /* 电机通信层初始化 */
     motor_zdt_init();           /* 电机控制应用初始化 */
-    modbus_adapter_init();      /* Modbus回调适配器初始化 */
+    protocol_router_init();     /* V3.0: 协议路由器初始化（Emm_V5+Modbus多协议共存） */
     
 #if FEATURE_MODBUS_ENABLE
-    protocol_router_init();     /* V3.0: 协议路由器初始化（多协议共存核心） */
+    modbus_adapter_init();      /* Modbus回调适配器初始化 */
     multi_motor_init();         /* V3.1: 多电机管理器初始化 */
     if (modbus_task_init() == 0) {
         printf("Modbus RTU initialized: Address=%d, Baudrate=%d\r\n", 

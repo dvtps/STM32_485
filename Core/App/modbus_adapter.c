@@ -16,6 +16,10 @@
  ******************************************************************************
  */
 
+#include "app_config.h"
+
+#if FEATURE_MODBUS_ENABLE
+
 #include "modbus_adapter.h"
 #include "modbus_hal.h"
 #include "emm_v5.h"
@@ -124,5 +128,11 @@ int modbus_adapter_init(void)
     };
     
     /* 注册到Modbus模块 */
+#if FEATURE_MODBUS_ENABLE
     return modbus_register_motor_callbacks(&callbacks);
+#else
+    return 0;  /* Modbus功能禁用时直接返回成功 */
+#endif
 }
+
+#endif /* FEATURE_MODBUS_ENABLE */

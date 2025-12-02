@@ -69,6 +69,27 @@
             }
         },
         {
+            "label": "Flash with pyOCD",
+            "type": "shell",
+            "command": "pyocd",
+            "args": [
+                "flash",
+                "-t",
+                "stm32f103c8",
+                "build/Debug/STM32_485.elf"
+            ],
+            "dependsOn": [
+                "Build Debug"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Erase Chip",
             "type": "shell",
             "command": "C:/ST/STM32CubeCLT_1.19.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",

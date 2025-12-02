@@ -47,6 +47,9 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)motor_stop, "void motor_stop(uint8_t addr)"},
     {(void *)motor_home, "void motor_home(uint8_t addr)"},
     {(void *)motor_read_status, "void motor_read_status(uint8_t addr)"},
+    // {(void *)motor_read_pos, "void motor_read_pos(uint8_t addr)"},  // TODO: 待实现
+    // {(void *)motor_read_vel, "void motor_read_vel(uint8_t addr)"},  // TODO: 待实现
+    // {(void *)motor_read_vbus, "void motor_read_vbus(uint8_t addr)"},  // TODO: 待实现
     
     /* V3.1: 多电机管理模块 */
     {(void *)multi_scan, "void multi_scan(uint8_t start,uint8_t end)"},
@@ -75,6 +78,14 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)mem_test_stress, "void mem_test_stress(uint16_t count)"},
     {(void *)mem_test_leak, "void mem_test_leak(uint8_t block_count)"},
     {(void *)mem_test_concurrent, "void mem_test_concurrent(void)"},
+    
+    /* RS485硬件测试 - 已验证IDLE中断正常，暂时注释调试工具 */
+    // {(void *)rs485_loopback_test, "void rs485_loopback_test(void)"},
+    // {(void *)rs485_debug_status, "void rs485_debug_status(void)"},
+    // {(void *)rs485_rxne_test, "void rs485_rxne_test(void)"},
+    // {(void *)rs485_nvic_test, "void rs485_nvic_test(void)"},
+    // {(void *)rs485_polling_test, "void rs485_polling_test(void)"},
+    // {(void *)rs485_motor_response_test, "void rs485_motor_response_test(void)"},
 };
 
 /******************************************************************************************/
