@@ -74,6 +74,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Drivers/BSP/KEY/key.c
     Drivers/BSP/IWDG/iwdg.c
     Drivers/BSP/IWDG/iwdg_timer.c
+    Drivers/BSP/MEM_POOL/mem_pool.c  # V3.5: 对象池内存管理
     Drivers/BSP/PROTOCOL_ROUTER/protocol_router.c  # V3.0: 协议路由器
     
     # ============ Drivers/Middlewares（中间件层） ============
@@ -108,6 +109,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Drivers/BSP/LED
     Drivers/BSP/KEY
     Drivers/BSP/IWDG
+    Drivers/BSP/MEM_POOL  # V3.5: 对象池内存管理
     Drivers/BSP/PROTOCOL_ROUTER  # V3.0: 协议路由器
     
     # Middlewares层（可重用服务）

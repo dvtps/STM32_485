@@ -13,6 +13,7 @@
 #include "protocol_router.h"
 #include "emm_v5.h"
 #include "usart.h"  /* V3.5 Phase 8: CRC和FIFO统计 */
+#include "mem_pool.h"  /* V3.5 Phase 1: 内存池管理 */
 #include <stdio.h>
 
 /* ============ 单电机控制实现 ============ */
@@ -174,4 +175,40 @@ void fifo_stats(void)
         }
     }
     printf("======================================\r\n\r\n");
+}
+
+/* ============ V3.5 Phase 1: 内存池调试命令实现 ============ */
+
+/**
+ * @brief       显示内存池统计信息
+ * @note        监控内存使用情况、分配失败、泄漏告警
+ */
+void mem_stats(void)
+{
+    mem_pool_print_stats();
+}
+
+/**
+ * @brief       检查并报告内存泄漏
+ * @note        扫描超过5秒未释放的内存块
+ */
+void mem_check_leaks(void)
+{
+    uint32_t current_time = HAL_GetTick();
+    uint32_t leak_count = mem_pool_check_leaks(current_time);
+    
+    printf("\r\n[MEM_POOL] Leak Check Result: %lu blocks leaked\r\n", (unsigned long)leak_count);
+    mem_pool_print_leak_report(current_time);
+}
+
+/**
+ * @brief       重置内存池统计计数器
+ * @param       type: 池类型（0=帧缓冲池, 1=电机状态池）
+ * @note        保留当前分配状态，仅重置计数器
+ */
+void mem_reset_stats(uint8_t type)
+{
+    mem_pool_type_t pool_type = (type == 0) ? MEM_POOL_TYPE_FRAME : MEM_POOL_TYPE_MOTOR_STATE;
+    mem_pool_reset_stats(pool_type);
+    printf("[MEM_POOL] Statistics reset for pool type %d\r\n", type);
 }

@@ -62,4 +62,10 @@ void proto_reset(void);                                /* 重置统计 */
 void crc_stats(void);                                  /* CRC统计信息 */
 void fifo_stats(void);                                 /* FIFO统计信息 */
 
+/* ============ V3.5 Phase 1: 内存池调试接口 ============ */
+
+void mem_stats(void);                                  /* 内存池统计信息 */
+void mem_check_leaks(void);                            /* 检查内存泄漏 */
+void mem_reset_stats(uint8_t type);                    /* 重置统计计数器 */
+
 #endif /* __USMART_INTERFACE_H */

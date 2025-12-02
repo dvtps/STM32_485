@@ -27,6 +27,7 @@
 #include "usart.h"             /* V3.5 Phase 2: USART2帧标志 */
 #include "fifo.h"              /* V3.5 Phase 2: FIFO出队 */
 #include "protocol_router.h"   /* V3.5 Phase 2: 协议路由 */
+#include "mem_pool.h"          /* V3.5 Phase 1: 内存池管理 */
 #include <stdio.h>
 
 #if FEATURE_MODBUS_ENABLE
@@ -51,6 +52,9 @@ int main(void)
     bsp_system_init();          /* 系统核心初始化（HAL+时钟+延时） */
     bsp_peripheral_init();      /* 外设初始化（LED+KEY+USART） */
     bsp_print_boot_info();      /* 打印启动信息 */
+    
+    /* V3.5 Phase 1: 内存池初始化（必须在所有分配操作前） */
+    mem_pool_init();            /* 对象池内存管理初始化 */
     
     /* ============ 第二阶段：功能模块初始化 ============ */
     emm_uart_init();            /* 电机通信层初始化 */
@@ -153,6 +157,16 @@ int main(void)
         if (sys_timer_expired(&main_loop_timer))
         {
             comm_check_timeout();
+        }
+        
+        /* 任务4.5：内存泄漏检测（V3.5 Phase 1新增，1秒周期） */
+        static uint32_t last_leak_check = 0;
+        if (HAL_GetTick() - last_leak_check >= 1000) {
+            last_leak_check = HAL_GetTick();
+            uint32_t leak_count = mem_pool_check_leaks(last_leak_check);
+            if (leak_count > 0) {
+                printf("[WARNING] Memory leak detected: %lu blocks\r\n", (unsigned long)leak_count);
+            }
         }
         
         /* 任务5：看门狗喂狗（低优先级，每次循环执行） */

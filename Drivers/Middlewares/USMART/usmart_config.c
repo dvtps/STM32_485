@@ -65,6 +65,11 @@ struct _m_usmart_nametab usmart_nametab[] =
     /* V3.5 Phase 8 P1: 增量CRC调试模块 */
     {(void *)crc_stats, "void crc_stats(void)"},
     {(void *)fifo_stats, "void fifo_stats(void)"},
+    
+    /* V3.5 Phase 1: 内存池调试模块 */
+    {(void *)mem_stats, "void mem_stats(void)"},
+    {(void *)mem_check_leaks, "void mem_check_leaks(void)"},
+    {(void *)mem_reset_stats, "void mem_reset_stats(uint8_t type)"},
 };
 
 /******************************************************************************************/
