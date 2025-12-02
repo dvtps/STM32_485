@@ -359,6 +359,7 @@ static void usart1_rx_callback(UART_HandleTypeDef *huart)
 #include "protocol_router.h"  /* V3.0新增：协议路由器 */
 
 static uint32_t idle_count = 0;  /* 调试：IDLE中断计数 */
+static uint32_t g_fifo_overflow_count = 0;  /* V3.5 Phase 8: FIFO溢出统计 */
 
 /* V3.5优化：全局标志位，主循环轮询处理 */
 volatile uint8_t g_usart2_frame_ready = 0;  /* 帧就绪标志 */
@@ -381,6 +382,16 @@ static void usart2_idle_callback(UART_HandleTypeDef *huart)
 uint32_t get_idle_interrupt_count(void)
 {
     return idle_count;
+}
+
+/**
+ * @brief       获取FIFO溢出计数（V3.5 Phase 8新增）
+ * @param       无
+ * @retval      溢出次数
+ */
+uint32_t get_fifo_overflow_count(void)
+{
+    return g_fifo_overflow_count;
 }
 #endif
 
@@ -501,7 +512,8 @@ void USART2_IRQHandler(void)
         data = (uint8_t)(g_uart2_handle.Instance->DR & 0xFF);
         if (emm_fifo_enqueue((uint16_t)data) != 0)
         {
-            /* FIFO溢出，数据丢失 */
+            /* V3.5 Phase 8优化: FIFO溢出计数（主循环可通过get_fifo_overflow_count()查询） */
+            g_fifo_overflow_count++;
         }
         __HAL_UART_CLEAR_FLAG(&g_uart2_handle, UART_FLAG_RXNE);
     }
