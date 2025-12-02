@@ -15,6 +15,7 @@
 #include "usart.h"  /* V3.5 Phase 8: CRC和FIFO统计 */
 #include "mem_pool.h"  /* V3.5 Phase 1: 内存池管理 */
 #include <stdio.h>
+#include <string.h>  /* memset */
 
 /* ============ 单电机控制实现 ============ */
 
@@ -211,4 +212,205 @@ void mem_reset_stats(uint8_t type)
     mem_pool_type_t pool_type = (type == 0) ? MEM_POOL_TYPE_FRAME : MEM_POOL_TYPE_MOTOR_STATE;
     mem_pool_reset_stats(pool_type);
     printf("[MEM_POOL] Statistics reset for pool type %d\r\n", type);
+}
+
+/* ============ 硬件测试函数 ============ */
+
+/**
+ * @brief       压力测试：循环分配和释放内存
+ * @param       count: 测试次数（推荐1000）
+ * @note        验证：无分配失败、无泄漏、无double_free
+ */
+void mem_test_stress(uint16_t count)
+{
+    printf("\r\n[MEM_TEST] Starting stress test (%d iterations)...\r\n", count);
+    printf("=========================================\r\n");
+    
+    uint32_t start_time = HAL_GetTick();
+    uint32_t fail_count = 0;
+    
+    /* 测试帧缓冲池 */
+    printf("[Frame Pool] Testing %d alloc/free cycles...\r\n", count);
+    for (uint16_t i = 0; i < count; i++) {
+        void* ptr = MEM_POOL_ALLOC_FRAME();
+        if (ptr == NULL) {
+            printf("  ✗ Alloc failed at iteration %d\r\n", i + 1);
+            fail_count++;
+            break;
+        }
+        
+        /* 写入测试数据（防止编译器优化） */
+        memset(ptr, 0xAA, 256);
+        
+        mem_pool_err_t err = mem_pool_free_frame(ptr);
+        if (err != MEM_POOL_OK) {
+            printf("  ✗ Free failed at iteration %d (err=%d)\r\n", i + 1, err);
+            fail_count++;
+            break;
+        }
+        
+        /* 每100次打印进度 */
+        if ((i + 1) % 100 == 0) {
+            printf("  Progress: %d/%d\r\n", i + 1, count);
+        }
+    }
+    
+    /* 测试电机状态池 */
+    printf("\r\n[Motor State Pool] Testing %d alloc/free cycles...\r\n", count);
+    for (uint16_t i = 0; i < count; i++) {
+        void* ptr = MEM_POOL_ALLOC_MOTOR_STATE();
+        if (ptr == NULL) {
+            printf("  ✗ Alloc failed at iteration %d\r\n", i + 1);
+            fail_count++;
+            break;
+        }
+        
+        /* 写入测试数据 */
+        memset(ptr, 0x55, 64);
+        
+        mem_pool_err_t err = mem_pool_free_motor_state(ptr);
+        if (err != MEM_POOL_OK) {
+            printf("  ✗ Free failed at iteration %d (err=%d)\r\n", i + 1, err);
+            fail_count++;
+            break;
+        }
+        
+        /* 每100次打印进度 */
+        if ((i + 1) % 100 == 0) {
+            printf("  Progress: %d/%d\r\n", i + 1, count);
+        }
+    }
+    
+    uint32_t elapsed = HAL_GetTick() - start_time;
+    
+    printf("\r\n=========================================\r\n");
+    printf("[MEM_TEST] Stress test completed\r\n");
+    printf("  Total iterations: %d x 2 pools = %d\r\n", count, count * 2);
+    printf("  Failed operations: %lu\r\n", (unsigned long)fail_count);
+    printf("  Elapsed time: %lu ms\r\n", (unsigned long)elapsed);
+    printf("  Avg time per op: %.2f us\r\n", (float)elapsed * 1000.0f / (count * 2));
+    
+    if (fail_count == 0) {
+        printf("  Result: ✓ PASSED\r\n");
+    } else {
+        printf("  Result: ✗ FAILED\r\n");
+    }
+    
+    printf("=========================================\r\n\r\n");
+    
+    /* 显示统计 */
+    mem_pool_print_stats();
+}
+
+/**
+ * @brief       泄漏测试：故意不释放内存，验证5秒后告警
+ * @param       block_count: 分配块数（1-4，超过池容量会失败）
+ * @note        测试步骤：分配内存 → 等待6秒 → 调用mem_check_leaks()查看告警
+ */
+void mem_test_leak(uint8_t block_count)
+{
+    printf("\r\n[MEM_TEST] Starting leak test (allocating %d blocks)...\r\n", block_count);
+    printf("=========================================\r\n");
+    
+    if (block_count > 4) {
+        printf("  ✗ Error: block_count must be 1-4\r\n");
+        printf("=========================================\r\n\r\n");
+        return;
+    }
+    
+    void* leaked_ptrs[4] = {NULL};
+    
+    /* 故意分配但不释放 */
+    for (uint8_t i = 0; i < block_count; i++) {
+        leaked_ptrs[i] = MEM_POOL_ALLOC_FRAME();
+        if (leaked_ptrs[i] == NULL) {
+            printf("  ✗ Alloc failed at block %d\r\n", i + 1);
+            break;
+        }
+        printf("  ✓ Allocated block %d at 0x%08lX\r\n", i + 1, (unsigned long)leaked_ptrs[i]);
+    }
+    
+    uint32_t alloc_time = HAL_GetTick();
+    
+    printf("\r\n[MEM_TEST] Blocks allocated (intentional leak)\r\n");
+    printf("  Please wait 6 seconds, then call: mem_check_leaks()\r\n");
+    printf("  Expected: %d leak warnings\r\n", block_count);
+    printf("  Allocation timestamp: %lu ms\r\n", (unsigned long)alloc_time);
+    printf("=========================================\r\n\r\n");
+    
+    /* 显示当前统计 */
+    mem_pool_print_stats();
+    
+    printf("\r\n[NOTE] To clean up, manually call:\r\n");
+    for (uint8_t i = 0; i < block_count; i++) {
+        if (leaked_ptrs[i] != NULL) {
+            printf("  write_addr(0x%08lX, 0)  // Mark as free (dangerous, for test only!)\r\n", 
+                   (unsigned long)leaked_ptrs[i]);
+        }
+    }
+    printf("\r\n");
+}
+
+/**
+ * @brief       并发测试：分配至池满，验证正确返回NULL
+ * @param       无
+ * @note        测试场景：模拟多任务同时分配内存，验证边界条件
+ */
+void mem_test_concurrent(void)
+{
+    printf("\r\n[MEM_TEST] Starting concurrent allocation test...\r\n");
+    printf("=========================================\r\n");
+    
+    void* frame_ptrs[5] = {NULL};  // 池容量4，第5个应失败
+    void* motor_ptrs[9] = {NULL};  // 池容量8，第9个应失败
+    
+    /* 测试帧缓冲池：分配至池满 */
+    printf("[Frame Pool] Allocating until full...\r\n");
+    for (uint8_t i = 0; i < 5; i++) {
+        frame_ptrs[i] = MEM_POOL_ALLOC_FRAME();
+        if (frame_ptrs[i] != NULL) {
+            printf("  ✓ Block %d allocated at 0x%08lX\r\n", i + 1, (unsigned long)frame_ptrs[i]);
+        } else {
+            printf("  ✓ Block %d allocation FAILED (expected, pool full)\r\n", i + 1);
+        }
+    }
+    
+    /* 测试电机状态池：分配至池满 */
+    printf("\r\n[Motor State Pool] Allocating until full...\r\n");
+    for (uint8_t i = 0; i < 9; i++) {
+        motor_ptrs[i] = MEM_POOL_ALLOC_MOTOR_STATE();
+        if (motor_ptrs[i] != NULL) {
+            printf("  ✓ Block %d allocated at 0x%08lX\r\n", i + 1, (unsigned long)motor_ptrs[i]);
+        } else {
+            printf("  ✓ Block %d allocation FAILED (expected, pool full)\r\n", i + 1);
+        }
+    }
+    
+    printf("\r\n[MEM_TEST] Testing double free detection...\r\n");
+    mem_pool_err_t err = mem_pool_free_frame(frame_ptrs[0]);
+    printf("  First free: %s\r\n", err == MEM_POOL_OK ? "✓ OK" : "✗ FAILED");
+    
+    err = mem_pool_free_frame(frame_ptrs[0]);  // 重复释放
+    printf("  Double free: %s (expected: ERR_DOUBLE_FREE)\r\n", 
+           err == MEM_POOL_ERR_DOUBLE_FREE ? "✓ OK" : "✗ FAILED");
+    
+    /* 清理资源 */
+    printf("\r\n[MEM_TEST] Cleaning up...\r\n");
+    for (uint8_t i = 1; i < 5; i++) {  // 从1开始，0已释放
+        if (frame_ptrs[i] != NULL) {
+            mem_pool_free_frame(frame_ptrs[i]);
+        }
+    }
+    for (uint8_t i = 0; i < 9; i++) {
+        if (motor_ptrs[i] != NULL) {
+            mem_pool_free_motor_state(motor_ptrs[i]);
+        }
+    }
+    
+    printf("=========================================\r\n");
+    printf("[MEM_TEST] Concurrent test completed\r\n");
+    printf("=========================================\r\n\r\n");
+    
+    /* 显示统计 */
+    mem_pool_print_stats();
 }

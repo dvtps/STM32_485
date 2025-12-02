@@ -68,4 +68,9 @@ void mem_stats(void);                                  /* 内存池统计信息 
 void mem_check_leaks(void);                            /* 检查内存泄漏 */
 void mem_reset_stats(uint8_t type);                    /* 重置统计计数器 */
 
+/* 硬件测试函数 */
+void mem_test_stress(uint16_t count);                  /* 压力测试：循环分配释放 */
+void mem_test_leak(uint8_t block_count);               /* 泄漏测试：故意不释放 */
+void mem_test_concurrent(void);                        /* 并发测试：分配至池满 */
+
 #endif /* __USMART_INTERFACE_H */

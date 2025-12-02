@@ -70,6 +70,11 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)mem_stats, "void mem_stats(void)"},
     {(void *)mem_check_leaks, "void mem_check_leaks(void)"},
     {(void *)mem_reset_stats, "void mem_reset_stats(uint8_t type)"},
+    
+    /* V3.5 Phase 1: 内存池硬件测试 */
+    {(void *)mem_test_stress, "void mem_test_stress(uint16_t count)"},
+    {(void *)mem_test_leak, "void mem_test_leak(uint8_t block_count)"},
+    {(void *)mem_test_concurrent, "void mem_test_concurrent(void)"},
 };
 
 /******************************************************************************************/
