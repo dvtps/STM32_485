@@ -23,6 +23,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* 串口中断已在Drivers/SYSTEM/usart/usart.c中实现 */
+#include "app_config.h"  /* 用于REALTIME_MOTOR_ENABLE宏 */
+
+#if REALTIME_MOTOR_ENABLE
+extern DMA_HandleTypeDef hdma_usart2_tx;
+extern TIM_HandleTypeDef g_htim2_rt;  /* TIM2实时定时器句柄 */
+#endif
 /* USER CODE END Includes */
 
 /* External variables --------------------------------------------------------*/
@@ -161,4 +167,35 @@ void SysTick_Handler(void)
 /* TIM4中断处理已在Drivers/Middlewares/USMART/usmart_port.c中实现 */
 
 /* USER CODE BEGIN 1 */
+
+#if REALTIME_MOTOR_ENABLE
+/**
+  * @brief This function handles DMA1 channel7 global interrupt (USART2_TX).
+  * @note  实时模式DMA发送完成中断
+  */
+void DMA1_Channel7_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&hdma_usart2_tx);
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt (10kHz实时控制周期).
+  * @note  V3.6: 100μs周期触发实时电机命令队列处理
+  */
+void TIM2_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&g_htim2_rt, TIM_FLAG_UPDATE) != RESET)
+    {
+        if (__HAL_TIM_GET_IT_SOURCE(&g_htim2_rt, TIM_IT_UPDATE) != RESET)
+        {
+            __HAL_TIM_CLEAR_IT(&g_htim2_rt, TIM_IT_UPDATE);
+            
+            /* 调用实时电机tick处理函数 */
+            extern void rt_motor_tick_handler(void);
+            rt_motor_tick_handler();
+        }
+    }
+}
+#endif
+
 /* USER CODE END 1 */

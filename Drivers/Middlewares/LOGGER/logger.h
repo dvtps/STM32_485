@@ -9,8 +9,8 @@
  * @attention
  * 
  * 功能说明:
- * - 统一管理LOG_ERROR/WARN/INFO/DEBUG�?
- * - 支持运行时动态调整日志级�?
+ * - 统一管理LOG_ERROR/WARN/INFO/DEBUG�?
+ * - 支持运行时动态调整日志级�?
  * - 减少Flash占用（条件编译）
  * 
  ****************************************************************************************************
@@ -24,18 +24,31 @@
 
 /* 日志级别枚举 */
 typedef enum {
-    LOG_LEVEL_NONE = 0,         /* 禁用所有日�?*/
-    LOG_LEVEL_ERROR,            /* 仅错�?*/
+    LOG_LEVEL_NONE = 0,         /* 禁用所有日�?*/
+    LOG_LEVEL_ERROR,            /* 仅错�?*/
     LOG_LEVEL_WARN,             /* 错误+警告 */
     LOG_LEVEL_INFO,             /* 错误+警告+信息 */
-    LOG_LEVEL_DEBUG             /* 所有日�?*/
+    LOG_LEVEL_DEBUG             /* 所有日�?*/
 } log_level_t;
 
 /* 全局日志级别变量 */
 extern log_level_t g_log_level;
 
-/* 统一日志宏（编译时条件检�?+ 运行时级别过滤） */
-#if 1  /* 总开关，可设�?完全禁用日志节省Flash */
+/* 公共函数声明 */
+void log_print(const char *module, const char *format, ...);
+
+/* 便捷宏：带时间戳的模块日志 */
+#define LOG_SYSTEM(fmt, ...)    log_print("系统", fmt, ##__VA_ARGS__)
+#define LOG_MOTOR(fmt, ...)     log_print("电机", fmt, ##__VA_ARGS__)
+#define LOG_PRINTER(fmt, ...)   log_print("打印机", fmt, ##__VA_ARGS__)
+#define LOG_MONITOR(fmt, ...)   log_print("监控", fmt, ##__VA_ARGS__)
+#define LOG_TASK(fmt, ...)      log_print("任务", fmt, ##__VA_ARGS__)
+#define LOG_RT(fmt, ...)        log_print("实时电机", fmt, ##__VA_ARGS__)
+#define LOG_TIM(fmt, ...)       log_print("TIM2", fmt, ##__VA_ARGS__)
+#define LOG_USMART(fmt, ...)    log_print("USMART", fmt, ##__VA_ARGS__)
+
+/* 统一日志宏（编译时条件检�?+ 运行时级别过滤） */
+#if 1  /* 总开关，可设�?完全禁用日志节省Flash */
 
 #define LOG_ERROR(fmt, ...) \
     do { \
@@ -69,8 +82,8 @@ extern log_level_t g_log_level;
 #endif
 
 /* 函数声明 */
-void log_system_init(log_level_t level);        /* 初始化日志系�?*/
-void log_set_level(log_level_t level);          /* 动态设置日志级�?*/
+void log_system_init(log_level_t level);        /* 初始化日志系�?*/
+void log_set_level(log_level_t level);          /* 动态设置日志级�?*/
 log_level_t log_get_level(void);                /* 获取当前日志级别 */
 
 #endif

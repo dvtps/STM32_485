@@ -1,0 +1,9 @@
+# 待删除无用文档/脚本清单
+- test_hardware_wizard.py
+- test_quick.py
+- test_multi_motor.py
+- test_modbus_simple.py
+- test_modbus_gateway.py
+- run_test.bat
+- demo_v31.py
+- check_architecture.py

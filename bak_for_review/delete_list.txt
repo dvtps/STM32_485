@@ -1,0 +1,13 @@
+# 待删除无用源文件/脚本/文档清单
+- Drivers/BSP/Y_V2/y_v2.c.bak
+- Drivers/BSP/Y_V2/y_v2.h.bak
+- Docs/test_hardware_wizard.py
+- Docs/test_quick.py
+- Docs/test_multi_motor.py
+- Docs/test_modbus_simple.py
+- Docs/test_modbus_gateway.py
+- Docs/run_test.bat
+- Docs/demo_v31.py
+- Docs/check_architecture.py
+- flash.bat
+- check_ready.bat

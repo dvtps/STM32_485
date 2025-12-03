@@ -42,6 +42,11 @@
 #define KEY0_PRES    1                  /* KEY0按下 */
 #define WKUP_PRES    2                  /* KEY_UP按下(即WK_UP) */
 
+#define KEY1_PRES    3                  /* KEY1按下（扩展） */
+#define KEY2_PRES    4                  /* KEY2按下（扩展） */
+#define WKUP_LONG_PRES  5               /* WKUP长按（扩展） */
+#define KEY0_LONG_PRES  6               /* KEY0长按（扩展） */
+
 /******************************************************************************************/
 /* V3.2架构重构：BSP层API */
 

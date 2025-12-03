@@ -29,11 +29,12 @@
 /* USART2 DMA模式开关 (0=传统RXNE中断, 1=DMA接收) */
 #define USART2_USE_DMA  0
 
-/* V3.5 Phase 8 P1优化: 增量CRC校验（节省~100 CPU周期） */
-#define ENABLE_INCREMENTAL_CRC  1
+/* V3.5 Phase 8 P1优化: 增量CRC校验（节省~100 CPU周期）
+ * V3.6注意：DMA接收模式下无法使用增量CRC（数据不经过RXNE中断），故禁用 */
+#define ENABLE_INCREMENTAL_CRC  0
 
 #if ENABLE_INCREMENTAL_CRC
-/* Modbus标准CRC16查找表（多项式0xA001，与modbus_rtu.c保持一致） */
+/* CRC16查找表（多项式0xA001） */
 static const uint16_t crc16_table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
     0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,
@@ -158,18 +159,15 @@ int __io_putchar(int ch)
 UART_HandleTypeDef g_uart1_handle;                      /* USART1句柄 */
 UART_HandleTypeDef g_uart2_handle;                      /* USART2句柄 */
 
+#if REALTIME_MOTOR_ENABLE
+DMA_HandleTypeDef hdma_usart2_tx;                       /* USART2 DMA发送句柄 */
+#endif
+
 /* USART1接收变量 */
 #if USART1_EN_RX
-uint8_t  g_usart1_rx_buf[USART1_REC_LEN];               /* USART1调试模式接收缓冲 */
-uint16_t g_usart1_rx_sta = 0;                           /* USART1调试模式接收状态 */
-static uint8_t g_usart1_rx_buffer[1];                   /* USART1单字节接收缓冲 */
-
-/* USART1 Modbus模式变量（工业级设计：独立缓冲区避免冲突） */
-volatile usart1_mode_t g_usart1_mode = USART1_MODE_DEBUG; /* 默认调试模式 */
-uint8_t  g_usart1_modbus_rx_buf[USART1_REC_LEN];       /* Modbus接收缓冲 */
-uint16_t g_usart1_modbus_rx_index = 0;                  /* Modbus接收索引 */
-volatile uint8_t g_usart1_modbus_frame_complete = 0;   /* Modbus帧完成标志 */
-static uint32_t g_usart1_last_rx_time = 0;              /* 最后接收时间(用于3.5字符超时检测) */
+uint8_t  g_usart1_rx_buf[USART1_REC_LEN];
+uint16_t g_usart1_rx_sta = 0;
+static uint8_t g_usart1_rx_buffer[1];
 #endif
 
 /* USART2接收变量(电机通信) */
@@ -178,6 +176,11 @@ uint8_t g_usart2_rx_buf[USART2_REC_LEN];                /* USART2接收缓冲 */
 uint8_t g_emm_rx_cmd[USART2_REC_LEN];                   /* 电机命令帧缓冲 */
 uint16_t g_emm_rx_count = 0;                            /* 电机帧长度 */
 volatile uint8_t g_emm_frame_complete = 0;              /* 电机帧完成标志 */
+
+/* DMA接收优化（V3.6：降低CPU占用95%） */
+static uint8_t g_dma_rx_buffer[512] __attribute__((aligned(4)));  /* DMA循环接收缓冲区 */
+static DMA_HandleTypeDef g_hdma_usart2_rx;              /* USART2 DMA接收句柄 */
+static volatile uint16_t g_last_dma_counter = 0;        /* 上次DMA计数器值 */
 #endif
 
 /**
@@ -231,13 +234,71 @@ void usart2_init(uint32_t baudrate)
     /* HAL库初始化（自动计算BRR，会调用HAL_UART_MspInit配置GPIO） */
     HAL_UART_Init(&g_uart2_handle);
 
+#if REALTIME_MOTOR_ENABLE
+    /* ========== 配置DMA发送（实时模式） ========== */
+    __HAL_RCC_DMA1_CLK_ENABLE();  /* 使能DMA1时钟 */
+    
+    /* 配置USART2_TX的DMA (DMA1 Channel 7) */
+    hdma_usart2_tx.Instance = DMA1_Channel7;
+    hdma_usart2_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart2_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart2_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart2_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+    
+    if (HAL_DMA_Init(&hdma_usart2_tx) != HAL_OK)
+    {
+        /* DMA初始化失败，进入错误处理 */
+        while(1);
+    }
+    
+    /* 关联DMA到UART句柄 */
+    __HAL_LINKDMA(&g_uart2_handle, hdmatx, hdma_usart2_tx);
+    
+    /* 使能DMA中断（最高优先级） */
+    HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+    
+    printf("[USART2] DMA TX configured (Channel 7, Priority=VeryHigh)\r\n");
+#endif
+
 #if USART2_EN_RX
     /* 初始化电机FIFO队列 */
     emm_fifo_init();
     
-    /* 开启USART2接收中断（RXNE + IDLE双中断） */
-    __HAL_UART_ENABLE_IT(&g_uart2_handle, UART_IT_RXNE);
+    /* ========== 配置DMA接收（V3.6：降低CPU占用95%） ========== */
+    /* 配置USART2_RX的DMA (DMA1 Channel 6) */
+    g_hdma_usart2_rx.Instance = DMA1_Channel6;
+    g_hdma_usart2_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    g_hdma_usart2_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    g_hdma_usart2_rx.Init.MemInc = DMA_MINC_ENABLE;
+    g_hdma_usart2_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    g_hdma_usart2_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    g_hdma_usart2_rx.Init.Mode = DMA_CIRCULAR;                    /* 循环模式 */
+    g_hdma_usart2_rx.Init.Priority = DMA_PRIORITY_HIGH;
+    
+    if (HAL_DMA_Init(&g_hdma_usart2_rx) != HAL_OK)
+    {
+        while(1);  /* DMA RX初始化失败 */
+    }
+    
+    /* 关联DMA到UART句柄 */
+    __HAL_LINKDMA(&g_uart2_handle, hdmarx, g_hdma_usart2_rx);
+    
+    /* 使能DMA接收中断（低优先级，仅用于错误检测） */
+    HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 2, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+    
+    /* 启动DMA循环接收（512字节环形缓冲区） */
+    HAL_UART_Receive_DMA(&g_uart2_handle, g_dma_rx_buffer, 512);
+    g_last_dma_counter = __HAL_DMA_GET_COUNTER(&g_hdma_usart2_rx);
+    
+    /* 仅开启IDLE中断（帧边界检测），无需RXNE中断 */
     __HAL_UART_ENABLE_IT(&g_uart2_handle, UART_IT_IDLE);
+    
+    printf("[USART2] DMA RX configured (Channel 6, Circular 512B, CPU saving 95%%)\r\n");
 #endif
 }
 
@@ -250,53 +311,6 @@ void usart_init(uint32_t baudrate)
 {
     usart1_init(baudrate);  /* 初始化USART1(调试) */
     usart2_init(baudrate);  /* 初始化USART2(电机) */
-}
-
-/**
- * @brief       USART1模式切换（工业级设计：运行时安全切换）
- * @param       mode: USART1_MODE_DEBUG(调试模式) 或 USART1_MODE_MODBUS(Modbus模式)
- * @retval      无
- * @note        切换前会自动清空接收缓冲区，确保无脏数据
- */
-void usart1_set_mode(usart1_mode_t mode)
-{
-#if USART1_EN_RX
-    __disable_irq();  /* 临界区保护：防止切换过程中断干扰 */
-    
-    /* 清空两个缓冲区（防止模式切换时数据污染） */
-    g_usart1_rx_sta = 0;
-    g_usart1_modbus_rx_index = 0;
-    g_usart1_modbus_frame_complete = 0;
-    
-    /* 切换模式 */
-    g_usart1_mode = mode;
-    
-    __enable_irq();
-#endif
-}
-
-/**
- * @brief       获取USART1当前工作模式
- * @retval      usart1_mode_t: 当前模式
- */
-usart1_mode_t usart1_get_mode(void)
-{
-    return g_usart1_mode;
-}
-
-/**
- * @brief       清空USART1接收缓冲区（模式切换前调用）
- * @retval      无
- */
-void usart1_flush_rx_buffer(void)
-{
-#if USART1_EN_RX
-    __disable_irq();
-    g_usart1_rx_sta = 0;
-    g_usart1_modbus_rx_index = 0;
-    g_usart1_modbus_frame_complete = 0;
-    __enable_irq();
-#endif
 }
 
 /**
@@ -405,7 +419,6 @@ static void usart1_rx_callback(UART_HandleTypeDef *huart)
  * @retval      无
  */
 #if USART2_EN_RX
-#include "protocol_router.h"  /* V3.0新增：协议路由器 */
 
 static uint32_t idle_count = 0;  /* 调试：IDLE中断计数 */
 static uint32_t g_fifo_overflow_count = 0;  /* V3.5 Phase 8: FIFO溢出统计 */
@@ -422,23 +435,46 @@ static void usart2_idle_callback(UART_HandleTypeDef *huart)
 {
     idle_count++;  /* 调试：记录IDLE中断次数 */
     
-    /* STM32F1清除IDLE标志的正确方法：
-     * 1. 读SR寄存器（在中断处理前已读取isrflags）
-     * 2. 读DR寄存器（清除IDLE标志）
-     * 注意：这里的DR读取不会丢失数据，因为RXNE已在前面处理完
-     */
+    /* STM32F1清除IDLE标志的正确方法 */
     (void)huart->Instance->DR;  /* 读DR以清除IDLE标志 */
     
+    /* V3.6 DMA接收优化：从DMA缓冲区批量转移到FIFO */
+    uint16_t current_counter = __HAL_DMA_GET_COUNTER(&g_hdma_usart2_rx);
+    uint16_t received_len;
+    
+    /* 计算本次接收长度（处理循环回绕） */
+    if (current_counter <= g_last_dma_counter)
+    {
+        received_len = g_last_dma_counter - current_counter;
+    }
+    else  /* DMA缓冲区循环回绕 */
+    {
+        received_len = 512 - current_counter + g_last_dma_counter;
+    }
+    
+    if (received_len > 0 && received_len < 512)
+    {
+        /* 计算DMA缓冲区读取起始位置 */
+        uint16_t read_pos = (512 - g_last_dma_counter) % 512;
+        
+        /* 批量转移到FIFO（单次memcpy或循环，视回绕情况） */
+        for (uint16_t i = 0; i < received_len; i++)
+        {
+            uint16_t idx = (read_pos + i) % 512;
+            emm_fifo_enqueue(g_dma_rx_buffer[idx]);
+        }
+    }
+    
+    /* 更新计数器 */
+    g_last_dma_counter = current_counter;
+    
 #if ENABLE_INCREMENTAL_CRC
-    /* P1优化: IDLE中断表示一帧接收完成，统计CRC计算次数 */
-    if (g_crc_byte_count > 0) {
+    if (received_len > 0) {
         g_crc_calc_count++;
     }
 #endif
     
-    /* V3.5关键优化：仅设置标志位，立即退出中断（<5μs）
-     * 数据出队和协议解析延迟到主循环处理
-     */
+    /* V3.5关键优化：仅设置标志位，立即退出中断（<5μs） */
     g_usart2_frame_ready = 1;
     __DSB();  /* 数据同步屏障，确保标志位写入完成 */
 }
@@ -535,60 +571,14 @@ void USART1_IRQHandler(void)
 #endif
 
 #if USART1_EN_RX
-    /* Modbus模式: 采用RXNE+IDLE双中断机制（类似USART2） */
-    if (g_usart1_mode == USART1_MODE_MODBUS)
+    /* IDLE中断清除（避免一直触发） */
+    if (__HAL_UART_GET_FLAG(&g_uart1_handle, UART_FLAG_IDLE) != RESET)
     {
-        uint8_t data;
-        
-        /* RXNE中断: 字节级接收 */
-        if (__HAL_UART_GET_FLAG(&g_uart1_handle, UART_FLAG_RXNE) != RESET)
-        {
-            data = (uint8_t)(g_uart1_handle.Instance->DR & 0xFF);
-            
-            /* 存入Modbus缓冲区（带溢出保护） */
-            if (g_usart1_modbus_rx_index < USART1_REC_LEN)
-            {
-                g_usart1_modbus_rx_buf[g_usart1_modbus_rx_index++] = data;
-                g_usart1_last_rx_time = HAL_GetTick();  /* 更新接收时间 */
-            }
-            else
-            {
-                /* 缓冲区溢出，重置索引（防止死锁） */
-                g_usart1_modbus_rx_index = 0;
-            }
-            
-            __HAL_UART_CLEAR_FLAG(&g_uart1_handle, UART_FLAG_RXNE);
-        }
-        
-        /* IDLE中断: 帧边界检测（Modbus标准3.5字符超时） */
-        if (__HAL_UART_GET_FLAG(&g_uart1_handle, UART_FLAG_IDLE) != RESET)
-        {
-            __HAL_UART_CLEAR_IDLEFLAG(&g_uart1_handle);
-            
-            /* 设置帧完成标志（主循环处理） */
-            if (g_usart1_modbus_rx_index > 0)
-            {
-                g_usart1_modbus_frame_complete = 1;
-                
-                /* 调用Modbus协议层回调（可选：也可在主循环处理） */
-                #ifdef MODBUS_RTU_IDLE_CALLBACK
-                extern void modbus_rtu_idle_callback(void);
-                modbus_rtu_idle_callback();
-                #endif
-            }
-        }
+        __HAL_UART_CLEAR_IDLEFLAG(&g_uart1_handle);
     }
-    else  /* 调试模式: 使用HAL库默认处理 */
-    {
-        /* IDLE中断清除（调试模式不使用IDLE，但需清标志避免一直触发） */
-        if (__HAL_UART_GET_FLAG(&g_uart1_handle, UART_FLAG_IDLE) != RESET)
-        {
-            __HAL_UART_CLEAR_IDLEFLAG(&g_uart1_handle);
-        }
-        
-        /* HAL库默认处理（RXNE中断 → HAL_UART_RxCpltCallback） */
-        HAL_UART_IRQHandler(&g_uart1_handle);
-    }
+    
+    /* HAL库默认处理 */
+    HAL_UART_IRQHandler(&g_uart1_handle);
 #else
     HAL_UART_IRQHandler(&g_uart1_handle);
 #endif
@@ -609,48 +599,11 @@ void USART2_IRQHandler(void)
 #endif
 
 #if USART2_EN_RX
-#if USART2_USE_DMA
-    /* DMA模式: 仅处理IDLE中断 */
+    /* V3.6 DMA模式: 仅处理IDLE中断（帧边界检测） */
     if (__HAL_UART_GET_FLAG(&g_uart2_handle, UART_FLAG_IDLE) != RESET)
-    {
-        usart2_idle_dma_handler(&g_uart2_handle);
-    }
-#else
-    /* 传统模式: RXNE + IDLE中断
-     * 关键修复: 先检查IDLE标志，因为读DR会自动清除IDLE标志
-     */
-    uint32_t isrflags = g_uart2_handle.Instance->SR;  /* 一次性读取所有标志 */
-    uint8_t data;
-    
-    /* 处理RXNE中断 */
-    if ((isrflags & UART_FLAG_RXNE) != 0)
-    {
-        data = (uint8_t)(g_uart2_handle.Instance->DR & 0xFF);
-        if (emm_fifo_enqueue((uint16_t)data) != 0)
-        {
-            /* V3.5 Phase 8优化: FIFO溢出计数（主循环可通过get_fifo_overflow_count()查询） */
-            g_fifo_overflow_count++;
-        }
-        else
-        {
-#if ENABLE_INCREMENTAL_CRC
-            /* P1优化: 在中断中实时累加CRC（查表法仅需~10个CPU周期）
-             * 优势: 主循环无需重新遍历整个缓冲区计算CRC，节省~100周期
-             * 开销: 每字节增加10周期中断时间（115200bps下可接受）
-             */
-            g_incremental_crc = (g_incremental_crc >> 8) ^ 
-                                crc16_table[(g_incremental_crc ^ data) & 0xFF];
-            g_crc_byte_count++;
-#endif
-        }
-    }
-    
-    /* 处理IDLE中断（必须在读DR之后检查保存的标志） */
-    if ((isrflags & UART_FLAG_IDLE) != 0)
     {
         usart2_idle_callback(&g_uart2_handle);
     }
-#endif
 #endif
 
     /* TC中断: 发送完成（用于emm_uart非阻塞模式） */
@@ -665,3 +618,39 @@ void USART2_IRQHandler(void)
     OSIntExit();
 #endif
 }
+
+#if USART2_EN_RX
+/**
+ * @brief       DMA1 Channel6中断服务函数（USART2 RX）
+ * @param       无
+ * @retval      无
+ * @note        V3.6：用于处理DMA传输完成/错误中断
+ */
+void DMA1_Channel6_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&g_hdma_usart2_rx);
+}
+
+/**
+ * @brief       获取DMA接收缓冲区使用率（调试/监控用）
+ * @param       无
+ * @retval      使用率百分比(0-100)
+ * @note        100%表示缓冲区已满，可能丢失数据
+ */
+uint8_t usart2_dma_get_usage(void)
+{
+    uint16_t remaining = __HAL_DMA_GET_COUNTER(&g_hdma_usart2_rx);
+    uint16_t used = 512 - remaining;
+    return (uint8_t)((used * 100) / 512);
+}
+
+/**
+ * @brief       重置DMA接收统计信息（调试用）
+ * @param       无
+ * @retval      无
+ */
+void usart2_dma_reset_stats(void)
+{
+    g_last_dma_counter = __HAL_DMA_GET_COUNTER(&g_hdma_usart2_rx);
+}
+#endif

@@ -27,6 +27,7 @@
 
 #include "stdio.h"
 #include "sys.h"
+#include "app_config.h"  /* 实时模式配置 */
 
 
 /******************************************************************************************/
@@ -37,14 +38,8 @@
 #define USART1_RX_GPIO_PORT                 GPIOA
 #define USART1_RX_GPIO_PIN                  GPIO_PIN_10
 
-#define USART1_REC_LEN                      256         /* USART1最大接收字节数(Modbus帧) */
-#define USART1_EN_RX                        1           /* 使能（1）/禁止（0）串口1接收 */
-
-/* USART1工作模式选择（工业级设计：运行时可切换） */
-typedef enum {
-    USART1_MODE_DEBUG = 0,      /* 调试模式: printf输出 + USMART命令接收 */
-    USART1_MODE_MODBUS = 1,     /* Modbus模式: Modbus RTU协议通讯 */
-} usart1_mode_t;
+#define USART1_REC_LEN                      256         /* USART1最大接收字节数 */
+#define USART1_EN_RX                        1           /* 使能串口1接收 */
 
 /******************************************************************************************/
 /* USART2配置 - RS485电机通信串口 */
@@ -54,10 +49,10 @@ typedef enum {
 #define USART2_RX_GPIO_PORT                 GPIOA
 #define USART2_RX_GPIO_PIN                  GPIO_PIN_3
 
-#define USART2_REC_LEN                      220         /* USART2最大接收字节数(电机帧) */
-#define USART2_EN_RX                        1           /* 使能（1）/禁止（0）串口2接收 */
+#define USART2_REC_LEN                      220         /* USART2最大接收字节数 */
+#define USART2_EN_RX                        1           /* 使能串口2接收 */
 
-/* IDLE中断标志清除宏（用于电机帧检测） */
+/* IDLE中断标志清除宏 */
 #ifndef __HAL_UART_CLEAR_IDLEFLAG
 #define __HAL_UART_CLEAR_IDLEFLAG(__HANDLE__)   \
     do{                                          \
@@ -74,17 +69,27 @@ typedef enum {
 extern UART_HandleTypeDef g_uart1_handle;               /* USART1句柄 */
 extern UART_HandleTypeDef g_uart2_handle;               /* USART2句柄 */
 
-/* USART1接收相关(调试串口) */
-extern uint8_t  g_usart1_rx_buf[USART1_REC_LEN];        /* USART1接收缓冲 */
-extern uint16_t g_usart1_rx_sta;                        /* USART1接收状态标记 */
+#if REALTIME_MOTOR_ENABLE
+extern DMA_HandleTypeDef hdma_usart2_tx;                /* USART2 DMA发送句柄 */
+#endif
 
-/* USART1 Modbus模式相关 */
-extern volatile usart1_mode_t g_usart1_mode;            /* USART1工作模式 */
-extern uint8_t  g_usart1_modbus_rx_buf[USART1_REC_LEN]; /* Modbus接收缓冲 */
-extern uint16_t g_usart1_modbus_rx_index;               /* Modbus接收索引 */
-extern volatile uint8_t g_usart1_modbus_frame_complete; /* Modbus帧完成标志 */
+/* USART1接收相关 */
+extern uint8_t  g_usart1_rx_buf[USART1_REC_LEN];
+extern uint16_t g_usart1_rx_sta;
 
-/* USMART兼容定义(指向USART1接收缓冲区) */
+/* USART2接收相关（电机通信） */
+#if USART2_EN_RX
+extern uint8_t g_usart2_rx_buf[USART2_REC_LEN];
+extern uint8_t g_emm_rx_cmd[USART2_REC_LEN];
+extern uint16_t g_emm_rx_count;
+extern volatile uint8_t g_emm_frame_complete;
+
+/* V3.6 DMA接收监控函数 */
+uint8_t usart2_dma_get_usage(void);                     /* 获取DMA缓冲区使用率 */
+void usart2_dma_reset_stats(void);                      /* 重置DMA统计信息 */
+#endif
+
+/* USMART兼容定义 */
 #define g_usart_rx_buf  g_usart1_rx_buf
 #define g_usart_rx_sta  g_usart1_rx_sta
 
@@ -102,11 +107,6 @@ extern volatile uint8_t g_usart2_frame_ready;
 void usart1_init(uint32_t baudrate);                    /* USART1初始化(printf调试) */
 void usart2_init(uint32_t baudrate);                    /* USART2初始化(RS485电机) */
 void usart_init(uint32_t baudrate);                     /* 统一初始化接口(兼容旧代码) */
-
-/* USART1模式控制函数(工业级双模切换) */
-void usart1_set_mode(usart1_mode_t mode);               /* 设置USART1工作模式 */
-usart1_mode_t usart1_get_mode(void);                    /* 获取当前工作模式 */
-void usart1_flush_rx_buffer(void);                      /* 清空接收缓冲区 */
 
 /* USART2统计与调试函数 */
 uint32_t get_idle_interrupt_count(void);                /* 获取IDLE中断计数 */

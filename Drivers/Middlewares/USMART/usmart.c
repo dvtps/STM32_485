@@ -92,23 +92,52 @@ uint8_t usmart_sys_cmd_exe(char *str)
         case 1: /* 帮助指令 */
             USMART_PRINTF("\r\n");
 #if USMART_USE_HELP
-            USMART_PRINTF("------------------------USMART V3.5------------------------ \r\n");
-            USMART_PRINTF("    USMART是由ALIENTEK开发的一个灵巧的串口调试互交组件,通过 \r\n");
-            USMART_PRINTF("它,你可以通过串口助手调用程序里面的任何函数,并执行.因此,你可\r\n");
-            USMART_PRINTF("以随意更改函数的输入参数(支持数字(10/16进制,支持负数)、字符串\r\n"),
-            USMART_PRINTF("、函数入口地址等作为参数),单个函数最多支持10个输入参数,并支持\r\n"),
-            USMART_PRINTF("函数返回值显示.支持参数显示进制设置功能,支持进制转换功能.\r\n");
-            USMART_PRINTF("技术支持:www.openedv.com\r\n");
+            USMART_PRINTF("----------------------STM32 电机控制系统 USMART V3.7----------------------\r\n");
+            USMART_PRINTF("    USMART是由ALIENTEK开发的串口调试互交组件,通过它,你可以通过串口\r\n");
+            USMART_PRINTF("助手调用程序里面的任何函数,并执行.支持数字(10/16进制,支持负数)、字\r\n");
+            USMART_PRINTF("符串、函数入口地址等作为参数,单个函数最多支持10个输入参数,并支持函\r\n");
+            USMART_PRINTF("数返回值显示.\r\n");
+            USMART_PRINTF("技术支持: www.openedv.com\r\n");
+            USMART_PRINTF("-----------------------------------------------------------------------------\r\n");
             USMART_PRINTF("USMART有7个系统命令(必须小写):\r\n");
-            USMART_PRINTF("?:      获取帮助信息\r\n");
-            USMART_PRINTF("help:   获取帮助信息\r\n");
-            USMART_PRINTF("list:   可用的函数列表\r\n\n");
-            USMART_PRINTF("id:     可用函数的ID列表\r\n\n");
-            USMART_PRINTF("hex:    参数16进制显示,后跟空格+数字即执行进制转换\r\n\n");
-            USMART_PRINTF("dec:    参数10进制显示,后跟空格+数字即执行进制转换\r\n\n");
-            USMART_PRINTF("runtime:1,开启函数运行计时;0,关闭函数运行计时;\r\n\n");
-            USMART_PRINTF("请按照程序编写格式输入函数名及参数并以回车键结束.\r\n");
-            USMART_PRINTF("--------------------------正点原子------------------------- \r\n");
+            USMART_PRINTF("?:        获取帮助信息\r\n");
+            USMART_PRINTF("help:     获取帮助信息\r\n");
+            USMART_PRINTF("list:     可用的函数列表\r\n");
+            USMART_PRINTF("id:       可用函数的ID列表\r\n");
+            USMART_PRINTF("hex:      参数16进制显示,后跟空格+数字即执行进制转换\r\n");
+            USMART_PRINTF("dec:      参数10进制显示,后跟空格+数字即执行进制转换\r\n");
+            USMART_PRINTF("runtime:  1,开启函数运行计时;0,关闭函数运行计时;\r\n");
+            USMART_PRINTF("\r\n请按照程序编写格式输入函数名及参数并以回车键结束.\r\n");
+            USMART_PRINTF("示例:\r\n");
+            USMART_PRINTF("  motor_pos_move(1,0,300,10,3200)  - X轴顺时针转1圈\r\n");
+            USMART_PRINTF("  motor_enable(1,1)                - 使能电机1\r\n");
+            USMART_PRINTF("  printer_home_all_axes()          - 全轴回零(无参数)\r\n");
+            USMART_PRINTF("  delay_ms(1000)                   - 延时1秒\r\n");
+            USMART_PRINTF("-----------------------------------------------------------------------------\r\n");
+            USMART_PRINTF("【常用电机命令】\r\n");
+            USMART_PRINTF("motor_enable(addr,enable)               - 使能控制(1=开,0=关)\r\n");
+            USMART_PRINTF("motor_pos_move(addr,dir,speed,acc,pulses) - 位置运动\r\n");
+            USMART_PRINTF("motor_vel_move(addr,dir,speed,acc)      - 速度运动\r\n");
+            USMART_PRINTF("motor_stop(addr)                        - 急停\r\n");
+            USMART_PRINTF("motor_home(addr)                        - 回零\r\n");
+            USMART_PRINTF("motor_read_status(addr)                 - 查询状态\r\n");
+            USMART_PRINTF("【3D打印机命令】\r\n");
+            USMART_PRINTF("printer_enable_all() / printer_disable_all() - 全轴使能/失能\r\n");
+            USMART_PRINTF("printer_move_x/y/z_mm_int(距离,速度)    - 单轴移动(分米精度,推荐)\r\n");
+            USMART_PRINTF("  示例: printer_move_x_mm_int(105,800)  - X轴移动10.5mm (105分米)\r\n");
+            USMART_PRINTF("  说明: 参数单位=分米(0.1mm), 105表示10.5mm\r\n");
+            USMART_PRINTF("printer_xyz_mm_int(x,y,z,speed)         - 三轴同步(分米单位)\r\n");
+            USMART_PRINTF("printer_move_x/y/z(脉冲,速度)           - 单轴移动(脉冲单位,调试用)\r\n");
+            USMART_PRINTF("printer_home_all_axes()                 - 全轴回零\r\n");
+            USMART_PRINTF("printer_estop()                         - 紧急停止\r\n");
+            USMART_PRINTF("\r\n机械参数: 导程20mm, 3200脉冲/圈, 160脉冲/mm, 分辨率0.00625mm\r\n");
+            USMART_PRINTF("\r\n【监控诊断】\r\n");
+            USMART_PRINTF("motor_monitor_status()                  - 电机监控状态\r\n");
+            USMART_PRINTF("crc_stats() / fifo_stats()              - 通信统计\r\n");
+            USMART_PRINTF("tim2_start/stop/status()                - 定时器控制\r\n");
+            USMART_PRINTF("\r\n参数详细说明请输入: motor_help()\r\n");
+            USMART_PRINTF("电机地址: X轴=1, Y轴左=2, Y轴右=3, Z轴=4\r\n");
+            USMART_PRINTF("-----------------------------------------------------------------------------\r\n");
 #else
             USMART_PRINTF("指令失效\r\n");
 #endif

@@ -4,138 +4,223 @@
  * @author  STM32_485 Project
  * @version V3.1
  * @date    2025-12-01
- * @brief   USMART接口函数实现（桥接层）
+ * @brief   USMART接口函数实现（桥接层�?
  ******************************************************************************
  */
 
 #include "usmart_interface.h"
-#include "multi_motor_manager.h"
-#include "protocol_router.h"
-#include "emm_v5.h"
+#include "app_config.h"  /* 检查FEATURE_MODBUS_ENABLE */
+
+/* V3.6: 同步usart.c的宏定义 */
+#ifndef ENABLE_INCREMENTAL_CRC
+#define ENABLE_INCREMENTAL_CRC  0  /* DMA接收模式下禁用 */
+#endif
+
+#if FEATURE_MODBUS_ENABLE
+/* 多电机管理器已归档（STM32F103容量不足）*/
+#endif
+#include "y_v2.h"      /* V3.0: Y系X固件协议驱动 */
 #include "usart.h"  /* V3.5 Phase 8: CRC和FIFO统计 */
-#include "mem_pool.h"  /* V3.5 Phase 1: 内存池管理 */
+#include "printer_axis.h"  /* 3D打印机3轴控制 */
+#include "motor_monitor.h"  /* V3.7: 电机监控系统 */
 #include <stdio.h>
+#include <stdlib.h>  /* for abs() */
 #include <string.h>  /* memset */
 
-/* ============ 单电机控制实现 ============ */
+/* ============ 单电机控制实现（保留有调试输出的函数）============ */
 
 void motor_enable(uint8_t addr, uint8_t enable)
 {
-    Emm_V5_En_Control(addr, enable ? true : false, false);
+    Y_V2_En_Control(addr, enable ? true : false, false);
     printf("Motor#%d %s\r\n", addr, enable ? "ENABLED" : "DISABLED");
 }
 
-void motor_pos_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc, uint32_t pulses)
+/* ============ 3D打印机3轴控制实现 ============ */
+
+void printer_enable_all(void)
 {
-    Emm_V5_Pos_Control(addr, dir, speed, acc, pulses, false, false);
-    printf("Motor#%d: POS dir=%d speed=%d pulses=%lu\r\n", addr, dir, speed, (unsigned long)pulses);
+    printer_axis_enable_all();
 }
 
-void motor_vel_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc)
+void printer_disable_all(void)
 {
-    Emm_V5_Vel_Control(addr, dir, speed, acc, false);
-    printf("Motor#%d: VEL dir=%d speed=%d\r\n", addr, dir, speed);
+    printer_axis_disable_all();
 }
 
-void motor_stop(uint8_t addr)
+/* ===== 以脉冲数为单位的移动函数（底层调试用） ===== */
+
+void printer_move_x(int32_t distance, uint16_t speed)
 {
-    Emm_V5_Stop_Now(addr, false);
-    printf("Motor#%d: STOP\r\n", addr);
+    printer_axis_move_relative(AXIS_X, distance, speed, 0);
+    printf("X-axis move: %ld pulses\r\n", (long)distance);
 }
 
-void motor_home(uint8_t addr)
+void printer_move_y(int32_t distance, uint16_t speed)
 {
-    Emm_V5_Origin_Trigger_Return(addr, 0, false);
-    printf("Motor#%d: HOME\r\n", addr);
+    printer_axis_move_relative(AXIS_Y, distance, speed, 0);
+    printf("Y-axis move: %ld pulses (dual motor sync)\r\n", (long)distance);
 }
 
-void motor_read_status(uint8_t addr)
+void printer_move_z(int32_t distance, uint16_t speed)
 {
-    Emm_V5_Read_Sys_Params(addr, false);
-    printf("Motor#%d: STATUS query sent\r\n", addr);
+    printer_axis_move_relative(AXIS_Z, distance, speed, 0);
+    printf("Z-axis move: %ld pulses\r\n", (long)distance);
 }
 
-/* ============ 多电机管理实现 ============ */
-
-void multi_scan(uint8_t start, uint8_t end)
+void printer_move_xyz(int32_t x, int32_t y, int32_t z, uint16_t speed)
 {
-    int count = multi_motor_scan(start, end);
-    printf("Scan complete: %d motors found\r\n", count);
+    printer_move_xyz_sync(x, y, z, speed);
 }
 
-void multi_map(uint8_t modbus, uint8_t physical)
+/* ===== 以毫米为单位的移动函数（3D打印应用推荐） ===== */
+
+void printer_move_x_mm(float distance_mm, uint16_t speed)
 {
-    if (multi_motor_map_address(modbus, physical) == 0) {
-        printf("Address mapped: Modbus#%d -> Physical#%d\r\n", modbus, physical);
-    } else {
-        printf("Map failed: invalid address\r\n");
+    printer_move_mm(AXIS_X, distance_mm, speed, 0);
+    printf("X-axis: %.2f mm (%.0f pulses @ 160p/mm)\r\n", 
+           distance_mm, distance_mm * PULSES_PER_MM);
+}
+
+/* ===== 整数版本mm移动函数（USMART兼容，精度0.1mm） ===== */
+
+void printer_move_x_mm_int(int16_t distance_dmm, uint16_t speed)
+{
+    float distance_mm = fabsf((float)distance_dmm) / 10.0f;  /* 绝对值转毫米 */
+    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
+    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
+
+    printf("[CMD] X轴移动: %c%.1fmm = %ld脉冲, 速度=%dRPM\r\n", 
+           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
+
+    bool result = printer_move_mm(AXIS_X, distance_mm * dir, speed, 0);
+
+    if (!result) {
+        printf("[ERROR] 移动失败!\r\n");
     }
 }
 
-void multi_list(void)
+void printer_move_y_mm(float distance_mm, uint16_t speed)
 {
-    multi_motor_print_list();
+    printer_move_mm(AXIS_Y, distance_mm, speed, 0);
+    printf("Y-axis: %.2f mm (dual motor sync)\r\n", distance_mm);
 }
 
-void multi_enable(uint16_t mask, uint8_t enable)
+void printer_move_z_mm(float distance_mm, uint16_t speed)
 {
-    multi_motor_enable_batch(mask, enable ? true : false);
-    printf("Batch enable: mask=0x%04X state=%d\r\n", mask, enable);
+    printer_move_mm(AXIS_Z, distance_mm, speed, 0);
+    printf("Z-axis: %.2f mm\r\n", distance_mm);
 }
 
-void multi_pos(uint16_t mask, uint8_t dir, uint16_t speed, uint32_t pulses)
+void printer_move_y_mm_int(int16_t distance_dmm, uint16_t speed)
 {
-    multi_motor_pos_control_batch(mask, dir, speed, 10, pulses);
-    printf("Batch pos: mask=0x%04X dir=%d speed=%d pulses=%lu\r\n", 
-           mask, dir, speed, (unsigned long)pulses);
+    float distance_mm = fabsf((float)distance_dmm) / 10.0f;
+    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
+    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
+
+    printf("[CMD] Y轴移动: %c%.1fmm = %ld脉冲 (双电机同步), 速度=%dRPM\r\n",
+           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
+
+    bool result = printer_move_mm(AXIS_Y, distance_mm * dir, speed, 0);
+
+    if (!result) {
+        printf("[ERROR] 移动失败!\r\n");
+    }
 }
 
-void multi_vel(uint16_t mask, uint8_t dir, uint16_t speed)
+void printer_move_z_mm_int(int16_t distance_dmm, uint16_t speed)
 {
-    multi_motor_vel_control_batch(mask, dir, speed, 10);
-    printf("Batch vel: mask=0x%04X dir=%d speed=%d\r\n", mask, dir, speed);
+    float distance_mm = fabsf((float)distance_dmm) / 10.0f;
+    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
+    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
+
+    printf("[CMD] Z轴移动: %c%.1fmm = %ld脉冲, 速度=%dRPM\r\n",
+           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
+
+    bool result = printer_move_mm(AXIS_Z, distance_mm * dir, speed, 0);
+
+    if (!result) {
+        printf("[ERROR] 移动失败!\r\n");
+    }
 }
 
-void multi_stop(uint16_t mask)
+void printer_xyz_mm(float x_mm, float y_mm, float z_mm, uint16_t speed)
 {
-    multi_motor_stop_batch(mask);
-    printf("Batch stop: mask=0x%04X\r\n", mask);
+    printer_move_xyz_mm(x_mm, y_mm, z_mm, speed);  /* 调用printer_axis.c中的实现 */
+    printf("XYZ sync: X=%.2f Y=%.2f Z=%.2f mm\r\n", x_mm, y_mm, z_mm);
 }
 
-void multi_home(uint16_t mask, uint8_t mode)
+void printer_xyz_mm_int(int16_t x_dmm, int16_t y_dmm, int16_t z_dmm, uint16_t speed)
 {
-    multi_motor_home_batch(mask, mode);
-    printf("Batch home: mask=0x%04X mode=%d\r\n", mask, mode);
-}
-
-/* ============ 协议统计实现 ============ */
-
-void proto_stats(void)
-{
-    const protocol_router_stats_t *stats = protocol_router_get_stats();
+    float x_mm = x_dmm / 10.0f;
+    float y_mm = y_dmm / 10.0f;
+    float z_mm = z_dmm / 10.0f;
     
-    printf("\r\n========== Protocol Statistics ==========\r\n");
-    printf("Modbus RTU frames:  %lu\r\n", (unsigned long)stats->modbus_frames);
-    printf("Emm_V5 frames:      %lu\r\n", (unsigned long)stats->emm_v5_frames);
-    printf("Unknown frames:     %lu\r\n", (unsigned long)stats->unknown_frames);
-    printf("CRC errors:         %lu\r\n", (unsigned long)stats->crc_errors);
-    printf("=========================================\r\n\r\n");
+    printf("[CMD] XYZ同步移动: X=%d.%dmm Y=%d.%dmm Z=%d.%dmm, 速度=%dRPM\r\n",
+           x_dmm/10, abs(x_dmm%10), y_dmm/10, abs(y_dmm%10), z_dmm/10, abs(z_dmm%10), speed);
+    
+    bool result = printer_move_xyz_mm(x_mm, y_mm, z_mm, speed);
+    
+    if (!result) {
+        printf("[ERROR] 移动失败!\r\n");
+    }
 }
 
-void proto_reset(void)
+void printer_home_x(void)
 {
-    protocol_router_reset_stats();
-    printf("Protocol statistics reset\r\n");
+    printer_axis_home(AXIS_X, 0);
+}
+
+void printer_home_y(void)
+{
+    printer_axis_home(AXIS_Y, 0);
+}
+
+void printer_home_z(void)
+{
+    printer_axis_home(AXIS_Z, 0);
+}
+
+void printer_home_all_axes(void)
+{
+    printer_home_all(0);
+}
+
+void printer_estop(void)
+{
+    printer_emergency_stop();
+}
+
+void printer_show_status(void)
+{
+    const printer_state_t *state = printer_get_state();
+    printf("\r\n========== 3D Printer Status ==========\r\n");
+    printf("All Homed: %s\r\n", state->all_homed ? "YES" : "NO");
+    printf("E-Stop: %s\r\n", state->emergency_stop ? "ACTIVE" : "Clear");
+    printf("Total Moves: %lu\r\n\r\n", (unsigned long)state->total_moves);
+    
+    const char *axis_names[] = {"X(Width)", "Y(Depth)", "Z(Height)"};
+    for (int i = 0; i < 3; i++) {
+        const axis_state_t *axis = &state->axes[i];
+        printf("%s: En=%d Home=%d Pos=%.2fmm (%ldp) Speed=%d\r\n",
+               axis_names[i],
+               axis->enabled,
+               axis->homed,
+               axis->position_mm,
+               (long)axis->position_pulses,
+               axis->speed);
+    }
+    printf("========================================\r\n\r\n");
 }
 
 /* ============ V3.5 Phase 8 P1: 增量CRC调试实现 ============ */
 
 /**
  * @brief       显示增量CRC统计信息
- * @note        测试增量CRC功能是否正常工作
+ * @note        V3.6注意：DMA接收模式下无增量CRC功能，此函数被禁用
  */
 void crc_stats(void)
 {
+#if ENABLE_INCREMENTAL_CRC
     uint16_t current_crc = get_incremental_crc();
     uint16_t byte_count = get_crc_byte_count();
     uint32_t calc_count = get_crc_calc_count();
@@ -147,6 +232,70 @@ void crc_stats(void)
     printf("CRC16 Table:        %s\r\n", "Enabled (256 entries)");
     printf("Performance gain:   ~100 CPU cycles/frame\r\n");
     printf("============================================\r\n\r\n");
+#else
+    printf("\r\n[INFO] Incremental CRC disabled in DMA RX mode\r\n");
+    printf("       (V3.6: DMA receives data directly, RXNE interrupt bypassed)\r\n\r\n");
+#endif
+}
+
+/* ============ V3.6: TIM2实时定时器控制 ============ */
+#if REALTIME_MOTOR_ENABLE
+
+extern uint8_t tim2_rt_init(void);
+extern void tim2_rt_start(void);
+extern void tim2_rt_stop(void);
+extern uint8_t tim2_rt_is_running(void);
+
+/**
+ * @brief       启动TIM2实时定时器
+ */
+void tim2_start(void)
+{
+    if (tim2_rt_is_running())
+    {
+        printf("[INFO] TIM2 is already running\r\n");
+        return;
+    }
+    tim2_rt_start();
+    printf("[TIM2] Started (10kHz, 100us period)\r\n");
+}
+
+/**
+ * @brief       停止TIM2实时定时器
+ */
+void tim2_stop(void)
+{
+    if (!tim2_rt_is_running())
+    {
+        printf("[INFO] TIM2 is already stopped\r\n");
+        return;
+    }
+    tim2_rt_stop();
+    printf("[TIM2] Stopped\r\n");
+}
+
+/**
+ * @brief       显示TIM2运行状态
+ */
+void tim2_status(void)
+{
+    printf("\r\n========== TIM2 Real-Time Timer Status ==========\r\n");
+    printf("State:         %s\r\n", tim2_rt_is_running() ? "RUNNING" : "STOPPED");
+    printf("Frequency:     10 kHz\r\n");
+    printf("Period:        100 us\r\n");
+    printf("Function:      rt_motor_tick_handler()\r\n");
+    printf("Priority:      Preemption=1 (below DMA)\r\n");
+    printf("=================================================\r\n\r\n");
+}
+
+#endif /* REALTIME_MOTOR_ENABLE */
+
+/**
+ * @brief       显示电机监控状态（V3.7反馈闭环）
+ */
+void motor_monitor_status(void)
+{
+    motor_monitor_print_status();
 }
 
 /**
@@ -178,355 +327,96 @@ void fifo_stats(void)
     printf("======================================\r\n\r\n");
 }
 
-/* ============ V3.5 Phase 1: 内存池调试命令实现 ============ */
-
 /**
- * @brief       显示内存池统计信息
- * @note        监控内存使用情况、分配失败、泄漏告警
+ * @brief       显示电机参数详细说明
+ * @note        输入 motor_help() 查看电机参数含义
  */
-void mem_stats(void)
+void motor_help(void)
 {
-    mem_pool_print_stats();
-}
-
-/**
- * @brief       检查并报告内存泄漏
- * @note        扫描超过5秒未释放的内存块
- */
-void mem_check_leaks(void)
-{
-    uint32_t current_time = HAL_GetTick();
-    uint32_t leak_count = mem_pool_check_leaks(current_time);
-    
-    printf("\r\n[MEM_POOL] Leak Check Result: %lu blocks leaked\r\n", (unsigned long)leak_count);
-    mem_pool_print_leak_report(current_time);
-}
-
-/**
- * @brief       重置内存池统计计数器
- * @param       type: 池类型（0=帧缓冲池, 1=电机状态池）
- * @note        保留当前分配状态，仅重置计数器
- */
-void mem_reset_stats(uint8_t type)
-{
-    mem_pool_type_t pool_type = (type == 0) ? MEM_POOL_TYPE_FRAME : MEM_POOL_TYPE_MOTOR_STATE;
-    mem_pool_reset_stats(pool_type);
-    printf("[MEM_POOL] Statistics reset for pool type %d\r\n", type);
-}
-
-/* ============ 硬件测试函数 ============ */
-
-/**
- * @brief       压力测试：循环分配和释放内存
- * @param       count: 测试次数（推荐1000）
- * @note        验证：无分配失败、无泄漏、无double_free
- */
-void mem_test_stress(uint16_t count)
-{
-    printf("\r\n[MEM_TEST] Starting stress test (%d iterations)...\r\n", count);
-    printf("=========================================\r\n");
-    
-    uint32_t start_time = HAL_GetTick();
-    uint32_t fail_count = 0;
-    
-    /* 测试帧缓冲池 */
-    printf("[Frame Pool] Testing %d alloc/free cycles...\r\n", count);
-    for (uint16_t i = 0; i < count; i++) {
-        void* ptr = MEM_POOL_ALLOC_FRAME();
-        if (ptr == NULL) {
-            printf("  ✗ Alloc failed at iteration %d\r\n", i + 1);
-            fail_count++;
-            break;
-        }
-        
-        /* 写入测试数据（防止编译器优化） */
-        memset(ptr, 0xAA, 256);
-        
-        mem_pool_err_t err = mem_pool_free_frame(ptr);
-        if (err != MEM_POOL_OK) {
-            printf("  ✗ Free failed at iteration %d (err=%d)\r\n", i + 1, err);
-            fail_count++;
-            break;
-        }
-        
-        /* 每100次打印进度 */
-        if ((i + 1) % 100 == 0) {
-            printf("  Progress: %d/%d\r\n", i + 1, count);
-        }
-    }
-    
-    /* 测试电机状态池 */
-    printf("\r\n[Motor State Pool] Testing %d alloc/free cycles...\r\n", count);
-    for (uint16_t i = 0; i < count; i++) {
-        void* ptr = MEM_POOL_ALLOC_MOTOR_STATE();
-        if (ptr == NULL) {
-            printf("  ✗ Alloc failed at iteration %d\r\n", i + 1);
-            fail_count++;
-            break;
-        }
-        
-        /* 写入测试数据 */
-        memset(ptr, 0x55, 64);
-        
-        mem_pool_err_t err = mem_pool_free_motor_state(ptr);
-        if (err != MEM_POOL_OK) {
-            printf("  ✗ Free failed at iteration %d (err=%d)\r\n", i + 1, err);
-            fail_count++;
-            break;
-        }
-        
-        /* 每100次打印进度 */
-        if ((i + 1) % 100 == 0) {
-            printf("  Progress: %d/%d\r\n", i + 1, count);
-        }
-    }
-    
-    uint32_t elapsed = HAL_GetTick() - start_time;
-    
-    printf("\r\n=========================================\r\n");
-    printf("[MEM_TEST] Stress test completed\r\n");
-    printf("  Total iterations: %d x 2 pools = %d\r\n", count, count * 2);
-    printf("  Failed operations: %lu\r\n", (unsigned long)fail_count);
-    printf("  Elapsed time: %lu ms\r\n", (unsigned long)elapsed);
-    printf("  Avg time per op: %.2f us\r\n", (float)elapsed * 1000.0f / (count * 2));
-    
-    if (fail_count == 0) {
-        printf("  Result: ✓ PASSED\r\n");
-    } else {
-        printf("  Result: ✗ FAILED\r\n");
-    }
-    
-    printf("=========================================\r\n\r\n");
-    
-    /* 显示统计 */
-    mem_pool_print_stats();
-}
-
-/**
- * @brief       泄漏测试：故意不释放内存，验证5秒后告警
- * @param       block_count: 分配块数（1-4，超过池容量会失败）
- * @note        测试步骤：分配内存 → 等待6秒 → 调用mem_check_leaks()查看告警
- */
-void mem_test_leak(uint8_t block_count)
-{
-    printf("\r\n[MEM_TEST] Starting leak test (allocating %d blocks)...\r\n", block_count);
-    printf("=========================================\r\n");
-    
-    if (block_count > 4) {
-        printf("  ✗ Error: block_count must be 1-4\r\n");
-        printf("=========================================\r\n\r\n");
-        return;
-    }
-    
-    void* leaked_ptrs[4] = {NULL};
-    
-    /* 故意分配但不释放 */
-    for (uint8_t i = 0; i < block_count; i++) {
-        leaked_ptrs[i] = MEM_POOL_ALLOC_FRAME();
-        if (leaked_ptrs[i] == NULL) {
-            printf("  ✗ Alloc failed at block %d\r\n", i + 1);
-            break;
-        }
-        printf("  ✓ Allocated block %d at 0x%08lX\r\n", i + 1, (unsigned long)leaked_ptrs[i]);
-    }
-    
-    uint32_t alloc_time = HAL_GetTick();
-    
-    printf("\r\n[MEM_TEST] Blocks allocated (intentional leak)\r\n");
-    printf("  Please wait 6 seconds, then call: mem_check_leaks()\r\n");
-    printf("  Expected: %d leak warnings\r\n", block_count);
-    printf("  Allocation timestamp: %lu ms\r\n", (unsigned long)alloc_time);
-    printf("=========================================\r\n\r\n");
-    
-    /* 显示当前统计 */
-    mem_pool_print_stats();
-    
-    printf("\r\n[NOTE] To clean up, manually call:\r\n");
-    for (uint8_t i = 0; i < block_count; i++) {
-        if (leaked_ptrs[i] != NULL) {
-            printf("  write_addr(0x%08lX, 0)  // Mark as free (dangerous, for test only!)\r\n", 
-                   (unsigned long)leaked_ptrs[i]);
-        }
-    }
     printf("\r\n");
-}
-
-/**
- * @brief       并发测试：分配至池满，验证正确返回NULL
- * @param       无
- * @note        测试场景：模拟多任务同时分配内存，验证边界条件
- */
-void mem_test_concurrent(void)
-{
-    printf("\r\n[MEM_TEST] Starting concurrent allocation test...\r\n");
-    printf("=========================================\r\n");
+    printf("========================================\r\n");
+    printf("       电机参数详细说明       \r\n");
+    printf("========================================\r\n\r\n");
     
-    void* frame_ptrs[5] = {NULL};  // 池容量4，第5个应失败
-    void* motor_ptrs[9] = {NULL};  // 池容量8，第9个应失败
+    printf("【基本参数】\r\n");
+    printf("  addr   - 电机地址 (1-255)\r\n");
+    printf("           X轴=0x01, Y轴左=0x02, Y轴右=0x03, Z轴=0x04\r\n\r\n");
     
-    /* 测试帧缓冲池：分配至池满 */
-    printf("[Frame Pool] Allocating until full...\r\n");
-    for (uint8_t i = 0; i < 5; i++) {
-        frame_ptrs[i] = MEM_POOL_ALLOC_FRAME();
-        if (frame_ptrs[i] != NULL) {
-            printf("  ✓ Block %d allocated at 0x%08lX\r\n", i + 1, (unsigned long)frame_ptrs[i]);
-        } else {
-            printf("  ✓ Block %d allocation FAILED (expected, pool full)\r\n", i + 1);
-        }
-    }
+    printf("  dir    - 旋转方向\r\n");
+    printf("           0=顺时针(CW), 1=逆时针(CCW)\r\n\r\n");
     
-    /* 测试电机状态池：分配至池满 */
-    printf("\r\n[Motor State Pool] Allocating until full...\r\n");
-    for (uint8_t i = 0; i < 9; i++) {
-        motor_ptrs[i] = MEM_POOL_ALLOC_MOTOR_STATE();
-        if (motor_ptrs[i] != NULL) {
-            printf("  ✓ Block %d allocated at 0x%08lX\r\n", i + 1, (unsigned long)motor_ptrs[i]);
-        } else {
-            printf("  ✓ Block %d allocation FAILED (expected, pool full)\r\n", i + 1);
-        }
-    }
+    printf("  speed  - 转速 (0-5000 RPM)\r\n");
+    printf("           推荐: 低速=100-300, 中速=300-800, 高速=800-2000\r\n\r\n");
     
-    printf("\r\n[MEM_TEST] Testing double free detection...\r\n");
-    mem_pool_err_t err = mem_pool_free_frame(frame_ptrs[0]);
-    printf("  First free: %s\r\n", err == MEM_POOL_OK ? "✓ OK" : "✗ FAILED");
+    printf("  acc    - 加速度 (0-255)\r\n");
+    printf("           0=立即启动, 1-255=梯形加减速\r\n");
+    printf("           推荐: 低速=5-10, 中速=10-20, 高速=20-50\r\n\r\n");
     
-    err = mem_pool_free_frame(frame_ptrs[0]);  // 重复释放
-    printf("  Double free: %s (expected: ERR_DOUBLE_FREE)\r\n", 
-           err == MEM_POOL_ERR_DOUBLE_FREE ? "✓ OK" : "✗ FAILED");
+    printf("  pulses - 脉冲数 (位置模式)\r\n");
+    printf("           16细分: 3200脉冲 = 1圈旋转\r\n");
+    printf("           常用: 1600=半圈, 3200=1圈, 6400=2圈\r\n\r\n");
     
-    /* 清理资源 */
-    printf("\r\n[MEM_TEST] Cleaning up...\r\n");
-    for (uint8_t i = 1; i < 5; i++) {  // 从1开始，0已释放
-        if (frame_ptrs[i] != NULL) {
-            mem_pool_free_frame(frame_ptrs[i]);
-        }
-    }
-    for (uint8_t i = 0; i < 9; i++) {
-        if (motor_ptrs[i] != NULL) {
-            mem_pool_free_motor_state(motor_ptrs[i]);
-        }
-    }
+    printf("【3D打印机机械参数】\r\n");
+    printf("  丝杠导程   - 20mm/圈 (电机转1圈, 平台移动20mm)\r\n");
+    printf("  脉冲密度   - 160脉冲/mm (3200脉冲/20mm)\r\n");
+    printf("  理论分辨率 - 0.00625mm/脉冲 (20/3200)\r\n");
+    printf("  实际精度   - 0.02mm (推荐最小移动单位)\r\n");
+    printf("  行程范围   - X:300mm, Y:300mm, Z:400mm\r\n\r\n");
     
-    printf("=========================================\r\n");
-    printf("[MEM_TEST] Concurrent test completed\r\n");
-    printf("=========================================\r\n\r\n");
+    printf("【毫米单位移动（推荐，0.1mm精度）】\r\n");
+    printf("  注意: USMART不支持浮点数，使用分米单位(0.1mm)\r\n");
+    printf("  示例: 10.5mm → 输入105, -20.0mm → 输入-200\r\n\r\n");
     
-    /* 显示统计 */
-    mem_pool_print_stats();
-}
-
-/* ============ V3.5 Phase 3: 多电机管理器调试接口 ============ */
-
-void mgr_scan(uint8_t start, uint8_t end)
-{
-    printf("[MotorMgr] Scanning motors (%d-%d)...\r\n", start, end);
-    uint8_t found = motor_mgr_scan(start, end);
-    printf("[MotorMgr] Found %d motor(s)\r\n", found);
-    motor_mgr_print_all_status();
-}
-
-void mgr_list(void)
-{
-    motor_mgr_print_all_status();
-}
-
-void mgr_info(uint8_t addr)
-{
-    motor_state_t *state = motor_mgr_find(addr);
-    if (state) {
-        motor_mgr_print_status(addr);
-    } else {
-        printf("[MotorMgr] Motor #%d not found\r\n", addr);
-    }
-}
-
-void mgr_enable(uint8_t addr, uint8_t enable)
-{
-    if (motor_mgr_enable(addr, enable ? true : false) == HAL_OK) {
-        printf("[MotorMgr] Motor #%d %s\r\n", addr, enable ? "ENABLED" : "DISABLED");
-    } else {
-        printf("[MotorMgr] Failed to control motor #%d\r\n", addr);
-    }
-}
-
-void mgr_move(uint8_t addr, uint8_t dir, uint16_t speed, uint32_t pulses)
-{
-    if (motor_mgr_move(addr, dir, speed, 10, pulses, false) == HAL_OK) {
-        printf("[MotorMgr] Motor #%d: dir=%d speed=%d pulses=%lu\r\n", 
-               addr, dir, speed, (unsigned long)pulses);
-    } else {
-        printf("[MotorMgr] Failed to move motor #%d\r\n", addr);
-    }
-}
-
-void mgr_stop(uint8_t addr)
-{
-    if (motor_mgr_stop(addr) == HAL_OK) {
-        printf("[MotorMgr] Motor #%d STOPPED\r\n", addr);
-    } else {
-        printf("[MotorMgr] Failed to stop motor #%d\r\n", addr);
-    }
-}
-
-void mgr_stop_all(void)
-{
-    uint8_t count = motor_mgr_stop_all();
-    printf("[MotorMgr] Stopped %d motor(s)\r\n", count);
-}
-
-void mgr_health(uint8_t addr)
-{
-    uint8_t health = motor_mgr_get_health(addr);
-    motor_state_t *state = motor_mgr_find(addr);
-    if (state) {
-        printf("[MotorMgr] Motor #%d: Health=%d, Online=%s\r\n", 
-               addr, health, state->online == MOTOR_STATUS_ONLINE ? "YES" : "NO");
-    } else {
-        printf("[MotorMgr] Motor #%d not found\r\n", addr);
-    }
-}
-
-void mgr_recover(void)
-{
-    printf("[MotorMgr] Triggering auto-recovery...\r\n");
-    motor_mgr_auto_recover();
-}
-
-void mgr_query_pos(uint8_t addr)
-{
-    if (motor_mgr_query_position(addr) == HAL_OK) {
-        HAL_Delay(100);  // 等待响应
-        motor_state_t *state = motor_mgr_find(addr);
-        if (state) {
-            printf("[MotorMgr] Motor #%d: Position=%ld\r\n", addr, (long)state->position);
-        }
-    } else {
-        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
-    }
-}
-
-void mgr_query_vel(uint8_t addr)
-{
-    if (motor_mgr_query_velocity(addr) == HAL_OK) {
-        HAL_Delay(100);  // 等待响应
-        motor_state_t *state = motor_mgr_find(addr);
-        if (state) {
-            printf("[MotorMgr] Motor #%d: Velocity=%d RPM\r\n", addr, state->velocity);
-        }
-    } else {
-        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
-    }
-}
-
-void mgr_query_vbus(uint8_t addr)
-{
-    if (motor_mgr_query_vbus(addr) == HAL_OK) {
-        HAL_Delay(100);  // 等待响应
-        motor_state_t *state = motor_mgr_find(addr);
-        if (state) {
-            printf("[MotorMgr] Motor #%d: Vbus=%u mV\r\n", addr, state->vbus);
-        }
-    } else {
-        printf("[MotorMgr] Failed to query motor #%d\r\n", addr);
-    }
+    printf("  1. X轴前进10.5mm\r\n");
+    printf("     printer_move_x_mm_int(105,800)\r\n\r\n");
+    
+    printf("  2. Y轴后退20mm (负数表示反向)\r\n");
+    printf("     printer_move_y_mm_int(-200,600)\r\n\r\n");
+    
+    printf("  3. Z轴上升5mm\r\n");
+    printf("     printer_move_z_mm_int(50,200)\r\n\r\n");
+    
+    printf("  4. XYZ三轴同步移动（G0快速定位）\r\n");
+    printf("     printer_xyz_mm_int(100,150,25,1000)\r\n");
+    printf("     => X=10.0mm, Y=15.0mm, Z=2.5mm\r\n\r\n");
+    
+    printf("【Y_V2底层API直接调用（V3.0 X固件协议）】\r\n");
+    printf("  注意: Y_V2使用角度(float)和加速度(RPM/S)\r\n");
+    printf("  raf=0相对上次, raf=1绝对, raf=2相对当前\r\n");
+    printf("  snF=0立即执行, snF=1同步等待\r\n\r\n");
+    
+    printf("  1. 位置控制 - 电机1顺时针转1圈 (300RPM, 360度)\r\n");
+    printf("     Y_V2_Bypass_Pos_Control(1,0,300.0,360.0,0,0)\r\n\r\n");
+    
+    printf("  2. 速度控制 - 电机1持续转动 (500RPM, 加速度1000RPM/S)\r\n");
+    printf("     Y_V2_Vel_Control(1,0,1000,500.0,0)\r\n\r\n");
+    
+    printf("  3. 立即停止 - 急停电机1\r\n");
+    printf("     Y_V2_Stop_Now(1,0)\r\n\r\n");
+    
+    printf("  4. 回零 - 电机1模式0回零\r\n");
+    printf("     Y_V2_Origin_Trigger_Return(1,0,0)\r\n\r\n");
+    
+    printf("  5. 查询转速 - 读取电机1实时转速(参数14)\r\n");
+    printf("     Y_V2_Read_Sys_Params(1,14)\r\n\r\n");
+    
+    printf("【脉冲单位移动（3轴封装，推荐）】\r\n");
+    printf("  1. X轴前进20mm (3200脉冲 = 20mm)\r\n");
+    printf("     printer_move_x(3200,800)\r\n\r\n");
+    
+    printf("【系统功能】\r\n");
+    printf("  • 全轴回零: printer_home_all_axes()  // 自动Z→Y→X\r\n");
+    printf("  • 紧急停止: printer_estop()\r\n");
+    printf("  • 查询状态: printer_show_status()\r\n\r\n");
+    
+    printf("【注意事项】\r\n");
+    printf("  • 首次使用前必须使能: motor_enable(addr,1)\r\n");
+    printf("  • 速度过高可能导致失步，建议<1000 RPM\r\n");
+    printf("  • 加速度过小会导致启动缓慢\r\n");
+    printf("  • Y轴双电机需同步: printer_move_y()自动处理\r\n");
+    printf("  • 紧急情况使用: printer_estop()\r\n\r\n");
+    
+    printf("========================================\r\n");
+    printf("输入 '?' 查看所有可用命令\r\n");
+    printf("========================================\r\n\r\n");
 }

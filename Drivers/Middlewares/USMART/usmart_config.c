@@ -12,6 +12,7 @@
 #include "sys.h"
 #include "delay.h"
 #include "usmart_interface.h"  /* USMART 可调用函数接口 */
+#include "y_v2.h"               /* V3.0: Y系列X固件协议驱动 */
 
 /* 函数名列表初始化(用户自己添加)
  * 用户直接在这里输入要执行的函数名及其查找串
@@ -20,6 +21,9 @@
  * 此警告不影响功能，可在CMakeLists.txt中全局禁用或忽略
  */
 struct _m_usmart_nametab usmart_nametab[] =
+#ifdef printer_clear_emergency_stop
+    {(void *)printer_clear_emergency_stop, "void printer_clear_emergency_stop(void)"},
+#endif
 {
 #if USMART_USE_WRFUNS == 1      /* 如果使能了读写操作 */
     {(void *)read_addr, "uint32_t read_addr(uint32_t addr)"},
@@ -33,73 +37,75 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)led_init, "void led_init(void)"},
     
     /* BSP/KEY 模块 */
-    {(void *)key_init, "void key_init(void)"},
-    {(void *)key_scan, "uint8_t key_scan(uint8_t mode)"},
+    /* {(void *)key_init, "void key_init(void)"},  // 如未用可注释 */
     
     /* BSP/IWDG 模块 */
     {(void *)iwdg_init, "void iwdg_init(uint8_t prer,uint16_t rlr)"},
     {(void *)iwdg_feed, "void iwdg_feed(void)"},
-    
-    /* BSP/EMM_V5 电机控制模块 */
-    {(void *)motor_enable, "void motor_enable(uint8_t addr,uint8_t enable)"},
-    {(void *)motor_pos_move, "void motor_pos_move(uint8_t addr,uint8_t dir,uint16_t speed,uint8_t acc,uint32_t pulses)"},
-    {(void *)motor_vel_move, "void motor_vel_move(uint8_t addr,uint8_t dir,uint16_t speed,uint8_t acc)"},
-    {(void *)motor_stop, "void motor_stop(uint8_t addr)"},
-    {(void *)motor_home, "void motor_home(uint8_t addr)"},
-    {(void *)motor_read_status, "void motor_read_status(uint8_t addr)"},
-    // {(void *)motor_read_pos, "void motor_read_pos(uint8_t addr)"},  // TODO: 待实现
-    // {(void *)motor_read_vel, "void motor_read_vel(uint8_t addr)"},  // TODO: 待实现
-    // {(void *)motor_read_vbus, "void motor_read_vbus(uint8_t addr)"},  // TODO: 待实现
-    
-    /* V3.1: 多电机管理模块 */
-    {(void *)multi_scan, "void multi_scan(uint8_t start,uint8_t end)"},
-    {(void *)multi_map, "void multi_map(uint8_t modbus,uint8_t physical)"},
-    {(void *)multi_list, "void multi_list(void)"},
-    {(void *)multi_enable, "void multi_enable(uint16_t mask,uint8_t enable)"},
-    {(void *)multi_pos, "void multi_pos(uint16_t mask,uint8_t dir,uint16_t speed,uint32_t pulses)"},
-    {(void *)multi_vel, "void multi_vel(uint16_t mask,uint8_t dir,uint16_t speed)"},
-    {(void *)multi_stop, "void multi_stop(uint16_t mask)"},
-    {(void *)multi_home, "void multi_home(uint16_t mask,uint8_t mode)"},
-    
-    /* V3.1: 协议统计模块 */
-    {(void *)proto_stats, "void proto_stats(void)"},
-    {(void *)proto_reset, "void proto_reset(void)"},
-    
-    /* V3.5 Phase 8 P1: 增量CRC调试模块 */
+    /* BSP/Y_V2 Y系列X固件电机控制（V3.0协议升级）*/
+    {(void *)Y_V2_En_Control, "void Y_V2_En_Control(uint8_t addr,uint8_t state,uint8_t snF)"},
+    {(void *)Y_V2_Bypass_Pos_Control, "void Y_V2_Bypass_Pos_Control(uint8_t addr,uint8_t dir,float vel,float pos,uint8_t raf,uint8_t snF)"},
+    {(void *)Y_V2_Vel_Control, "void Y_V2_Vel_Control(uint8_t addr,uint8_t dir,uint16_t acc,float vel,uint8_t snF)"},
+    {(void *)Y_V2_Stop_Now, "void Y_V2_Stop_Now(uint8_t addr,uint8_t snF)"},
+    {(void *)Y_V2_Origin_Trigger_Return, "void Y_V2_Origin_Trigger_Return(uint8_t addr,uint8_t mode,uint8_t snF)"},
+    {(void *)Y_V2_Read_Sys_Params, "void Y_V2_Read_Sys_Params(uint8_t addr,SysParams_t param)"},
+    {(void *)Y_V2_Synchronous_Motion, "void Y_V2_Synchronous_Motion(uint8_t addr)"},
+    /* 3D打印机3轴控制（高层）*/
+    {(void *)printer_enable_all, "void printer_enable_all(void)"},
+    {(void *)printer_disable_all, "void printer_disable_all(void)"},
+    /* 脉冲数单位移动（底层调试）*/
+    {(void *)printer_move_x, "void printer_move_x(int32_t distance,uint16_t speed)"},
+    {(void *)printer_move_y, "void printer_move_y(int32_t distance,uint16_t speed)"},
+    {(void *)printer_move_z, "void printer_move_z(int32_t distance,uint16_t speed)"},
+    {(void *)printer_move_xyz, "void printer_move_xyz(int32_t x,int32_t y,int32_t z,uint16_t speed)"},
+    /* 毫米单位移动（应用层推荐，USMART兼容整数版本）*/
+    {(void *)printer_move_x_mm_int, "void printer_move_x_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_move_y_mm_int, "void printer_move_y_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_move_z_mm_int, "void printer_move_z_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_xyz_mm_int, "void printer_xyz_mm_int(int16_t x_dmm,int16_t y_dmm,int16_t z_dmm,uint16_t speed)"},
+    /* 回零与状态 */
+    {(void *)printer_home_x, "void printer_home_x(void)"},
+    {(void *)printer_home_y, "void printer_home_y(void)"},
+    {(void *)printer_home_z, "void printer_home_z(void)"},
+    {(void *)printer_home_all_axes, "void printer_home_all_axes(void)"},
+    {(void *)printer_estop, "void printer_estop(void)"},
+    {(void *)printer_show_status, "void printer_show_status(void)"},
+    /* 调试统计模块 */
     {(void *)crc_stats, "void crc_stats(void)"},
     {(void *)fifo_stats, "void fifo_stats(void)"},
+    {(void *)motor_monitor_status, "void motor_monitor_status(void)"},  /* V3.7: 电机监控 */
+    /* V3.7: 帮助系统 */
+    {(void *)motor_help, "void motor_help(void)"},  /* 电机命令帮助 */
     
-    /* V3.5 Phase 1: 内存池调试模块 */
-    {(void *)mem_stats, "void mem_stats(void)"},
-    {(void *)mem_check_leaks, "void mem_check_leaks(void)"},
-    {(void *)mem_reset_stats, "void mem_reset_stats(uint8_t type)"},
+    /* 毫米单位移动（应用层推荐，USMART兼容整数版本）*/
+    {(void *)printer_move_x_mm_int, "void printer_move_x_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_move_y_mm_int, "void printer_move_y_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_move_z_mm_int, "void printer_move_z_mm_int(int16_t distance_dmm,uint16_t speed)"},
+    {(void *)printer_xyz_mm_int, "void printer_xyz_mm_int(int16_t x_dmm,int16_t y_dmm,int16_t z_dmm,uint16_t speed)"},
     
-    /* V3.5 Phase 1: 内存池硬件测试 */
-    {(void *)mem_test_stress, "void mem_test_stress(uint16_t count)"},
-    {(void *)mem_test_leak, "void mem_test_leak(uint8_t block_count)"},
-    {(void *)mem_test_concurrent, "void mem_test_concurrent(void)"},
+    /* 回零与状态 */
+    {(void *)printer_home_x, "void printer_home_x(void)"},
+    {(void *)printer_home_y, "void printer_home_y(void)"},
+    {(void *)printer_home_z, "void printer_home_z(void)"},
+    {(void *)printer_home_all_axes, "void printer_home_all_axes(void)"},
+    {(void *)printer_estop, "void printer_estop(void)"},
+    {(void *)printer_show_status, "void printer_show_status(void)"},
     
-    /* V3.5 Phase 3: 多电机管理器调试命令 */
-    {(void *)mgr_scan, "void mgr_scan(uint8_t start,uint8_t end)"},
-    {(void *)mgr_list, "void mgr_list(void)"},
-    {(void *)mgr_info, "void mgr_info(uint8_t addr)"},
-    {(void *)mgr_enable, "void mgr_enable(uint8_t addr,uint8_t enable)"},
-    {(void *)mgr_move, "void mgr_move(uint8_t addr,uint8_t dir,uint16_t speed,uint32_t pulses)"},
-    {(void *)mgr_stop, "void mgr_stop(uint8_t addr)"},
-    {(void *)mgr_stop_all, "void mgr_stop_all(void)"},
-    {(void *)mgr_health, "void mgr_health(uint8_t addr)"},
-    {(void *)mgr_recover, "void mgr_recover(void)"},
-    {(void *)mgr_query_pos, "void mgr_query_pos(uint8_t addr)"},
-    {(void *)mgr_query_vel, "void mgr_query_vel(uint8_t addr)"},
-    {(void *)mgr_query_vbus, "void mgr_query_vbus(uint8_t addr)"},
+    /* 调试统计模块 */
+    {(void *)crc_stats, "void crc_stats(void)"},
+    {(void *)fifo_stats, "void fifo_stats(void)"},
+    {(void *)motor_monitor_status, "void motor_monitor_status(void)"},  /* V3.7: 电机监控 */
     
-    /* RS485硬件测试 - 已验证IDLE中断正常，暂时注释调试工具 */
-    // {(void *)rs485_loopback_test, "void rs485_loopback_test(void)"},
-    // {(void *)rs485_debug_status, "void rs485_debug_status(void)"},
-    // {(void *)rs485_rxne_test, "void rs485_rxne_test(void)"},
-    // {(void *)rs485_nvic_test, "void rs485_nvic_test(void)"},
-    // {(void *)rs485_polling_test, "void rs485_polling_test(void)"},
-    // {(void *)rs485_motor_response_test, "void rs485_motor_response_test(void)"},
+    /* V3.7: 帮助系统 */
+    {(void *)motor_help, "void motor_help(void)"},  /* 电机命令帮助 */
+    
+#if REALTIME_MOTOR_ENABLE
+    /* V3.6: TIM2实时定时器控制 */
+    {(void *)tim2_start, "void tim2_start(void)"},
+    {(void *)tim2_stop, "void tim2_stop(void)"},
+    {(void *)tim2_status, "void tim2_status(void)"},
+#endif
+    
 };
 
 /******************************************************************************************/

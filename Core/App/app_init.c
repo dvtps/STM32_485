@@ -15,7 +15,7 @@
 #include "led.h"
 #include "key.h"
 #include "error_handler.h"    /* V3.5: 错误处理系统 */
-#include "comm_monitor.h"     /* V3.5: 通信监控 */
+#include "logger.h"           /* V3.7: 带时间戳的日志系统 */
 #include <stdio.h>
 
 /**
@@ -64,9 +64,6 @@ bsp_init_status_t bsp_peripheral_init(void)
     /* V3.5: 错误处理系统初始化 */
     error_handler_init();
     
-    /* V3.5: 通信监控初始化 */
-    comm_monitor_init();
-    
     return BSP_INIT_OK;
 }
 
@@ -82,12 +79,13 @@ void bsp_print_boot_info(void)
     
     printf("\r\n");
     printf("========================================\r\n");
-    printf("  STM32F103 Motor Control System V3.0  \r\n");
+    printf("  STM32F103 电机控制系统 V3.7  \r\n");
     printf("========================================\r\n");
-    printf("System Clock:   %lu MHz\r\n", (unsigned long)(SystemCoreClock / 1000000));
-    printf("APB1 Clock:     %lu MHz\r\n", (unsigned long)(HAL_RCC_GetPCLK1Freq() / 1000000));
-    printf("APB2 Clock:     %lu MHz\r\n", (unsigned long)(HAL_RCC_GetPCLK2Freq() / 1000000));
-    printf("Compile Date:   %s %s\r\n", __DATE__, __TIME__);
-    printf("Architecture:   V3.0 (3-Layer Design)\r\n");
+    LOG_SYSTEM("系统时钟: %luMHz, APB1: %luMHz, APB2: %luMHz",
+               (unsigned long)(SystemCoreClock / 1000000),
+               (unsigned long)(HAL_RCC_GetPCLK1Freq() / 1000000),
+               (unsigned long)(HAL_RCC_GetPCLK2Freq() / 1000000));
+    LOG_SYSTEM("编译日期: %s %s", __DATE__, __TIME__);
+    LOG_SYSTEM("架构版本: V3.7 (实时反馈系统)");
     printf("========================================\r\n\r\n");
 }

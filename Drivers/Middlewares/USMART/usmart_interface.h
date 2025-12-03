@@ -1,3 +1,4 @@
+void printer_clear_emergency_stop(void); /* 解除急停状态 */
 /**
  ******************************************************************************
  * @file    usmart_interface.h
@@ -30,18 +31,17 @@ uint8_t key_scan(uint8_t mode);
 void iwdg_init(uint8_t prer, uint16_t rlr);
 void iwdg_feed(void);
 
-/* 单电机控制（原motor_zdt.c封装） */
+/* 单电机控制（保留有调试输出的函数） */
 void motor_enable(uint8_t addr, uint8_t enable);
-void motor_pos_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc, uint32_t pulses);
-void motor_vel_move(uint8_t addr, uint8_t dir, uint16_t speed, uint8_t acc);
-void motor_stop(uint8_t addr);
-void motor_home(uint8_t addr);
 
-/* 单电机查询（V3.5增强） */
-void motor_read_status(uint8_t addr);    /* 读取状态标志 */
-void motor_read_pos(uint8_t addr);       /* 读取当前位置 */
-void motor_read_vel(uint8_t addr);       /* 读取当前速度 */
-void motor_read_vbus(uint8_t addr);      /* 读取总线电压 */
+/* 注意：其他电机控制函数已直接注册底层 EMM_V5 API，无套娃层 */
+/* 使用方法：
+ * Emm_V5_Pos_Control(addr,dir,speed,acc,pulses,0,0)  - 位置控制
+ * Emm_V5_Vel_Control(addr,dir,speed,acc,0)           - 速度控制
+ * Emm_V5_Stop_Now(addr,0)                            - 立即停止
+ * Emm_V5_Origin_Trigger_Return(addr,mode,0)          - 回零
+ * Emm_V5_Read_Sys_Params(addr,0)                     - 读取状态
+ */
 
 /* ============ V3.1新增：多电机管理接口 ============ */
 
@@ -66,6 +66,10 @@ void proto_reset(void);                                /* 重置统计 */
 
 void crc_stats(void);                                  /* CRC统计信息 */
 void fifo_stats(void);                                 /* FIFO统计信息 */
+
+/* ============ V3.7: 电机监控系统 ============ */
+
+void motor_monitor_status(void);                       /* 显示电机监控状态（反馈闭环）*/
 
 /* ============ V3.5 Phase 1: 内存池调试接口 ============ */
 
@@ -100,5 +104,59 @@ void rs485_rxne_test(void);                            /* RXNE中断测试：单
 void rs485_nvic_test(void);                            /* NVIC配置检查 */
 void rs485_polling_test(void);                         /* 轮询模式测试：不依赖中断 */
 void rs485_motor_response_test(void);                  /* 电机响应测试：检查IDLE中断 */
+
+/* ============ 3D打印机控制接口 ============ */
+
+/* 电机使能控制 */
+void printer_enable_all(void);                         /* 使能所有4台电机 */
+void printer_disable_all(void);                        /* 失能所有4台电机 */
+
+/* 单轴运动控制（脉冲数单位，底层调试用） */
+void printer_move_x(int32_t distance, uint16_t speed); /* X轴移动（脉冲数） */
+void printer_move_y(int32_t distance, uint16_t speed); /* Y轴移动（脉冲数，双电机同步） */
+void printer_move_z(int32_t distance, uint16_t speed); /* Z轴移动（脉冲数） */
+
+/* 多轴协同运动（脉冲数单位） */
+void printer_move_xyz(int32_t x, int32_t y, int32_t z, uint16_t speed);  /* XYZ三轴协同运动 */
+
+/* 单轴运动控制（毫米单位，应用层推荐） */
+void printer_move_x_mm(float distance_mm, uint16_t speed); /* X轴移动（mm） */
+void printer_move_y_mm(float distance_mm, uint16_t speed); /* Y轴移动（mm，双电机同步） */
+void printer_move_z_mm(float distance_mm, uint16_t speed); /* Z轴移动（mm） */
+
+/* 多轴协同运动（毫米单位）*/
+void printer_xyz_mm(float x_mm, float y_mm, float z_mm, uint16_t speed);  /* XYZ三轴协同运动（mm）*/
+
+/* 整数版本mm移动函数（USMART兼容，精度0.1mm）*/
+void printer_move_x_mm_int(int16_t distance_dmm, uint16_t speed); /* X轴移动（分米：105=10.5mm）*/
+void printer_move_y_mm_int(int16_t distance_dmm, uint16_t speed); /* Y轴移动（分米）*/
+void printer_move_z_mm_int(int16_t distance_dmm, uint16_t speed); /* Z轴移动（分米）*/
+void printer_xyz_mm_int(int16_t x_dmm, int16_t y_dmm, int16_t z_dmm, uint16_t speed); /* XYZ同步（分米）*/
+
+/* 回零功能 */
+void printer_home_x(void);                             /* X轴回零 */
+void printer_home_y(void);                             /* Y轴回零（双电机同步） */
+void printer_home_z(void);                             /* Z轴回零 */
+void printer_home_all_axes(void);                      /* 全轴回零（Z→Y→X顺序） */
+
+/* 紧急停止 */
+void printer_estop(void);                              /* 紧急停止所有电机 */
+
+/* 状态查询 */
+void printer_show_status(void);                        /* 显示打印机状态 */
+
+/* V3.5 Phase 8: 调试统计模块 */
+void crc_stats(void);        /* 显示CRC统计信息 */
+void fifo_stats(void);       /* 显示FIFO统计信息 */
+
+/* V3.7: 帮助系统 */
+void motor_help(void);       /* 显示电机控制命令帮助 */
+
+/* V3.6: TIM2实时定时器控制 */
+#if REALTIME_MOTOR_ENABLE
+void tim2_start(void);       /* 启动TIM2定时器 */
+void tim2_stop(void);        /* 停止TIM2定时器 */
+void tim2_status(void);      /* 显示TIM2状态 */
+#endif
 
 #endif /* __USMART_INTERFACE_H */
