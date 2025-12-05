@@ -34,7 +34,7 @@
 
 /* 当前使用的发送模式 */
 #ifndef EMM_UART_TX_MODE
-#define EMM_UART_TX_MODE  EMM_UART_MODE_BLOCKING
+#define EMM_UART_TX_MODE  EMM_UART_MODE_BLOCKING  /* 切换回阻塞模式 */
 #endif
 
 /* 最小发送间隔（ms），防止RS485总线拥堵 */

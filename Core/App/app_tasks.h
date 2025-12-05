@@ -28,6 +28,7 @@ void app_tasks_run(void);
 /* 单独的任务接口（可选，用于USMART调试） */
 void task_comm_process(void);       /* 通信帧处理 */
 void task_motor_control(void);      /* 电机控制 */
+void task_led_heartbeat(void);      /* LED心跳指示 */
 void task_comm_monitor(void);       /* 通信监控 */
 void task_mem_check(void);          /* 内存检测 */
 void task_watchdog_feed(void);      /* 看门狗喂狗 */

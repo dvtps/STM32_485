@@ -49,13 +49,13 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wno-pedantic -Wno-int-conversion)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # ============ App层（纯业务逻辑编排） ============
+                Drivers/BSP/Y_V2/emm_v5_parser.c       # ============ App层（纯业务逻辑编排） ============
     Core/App/main.c
     Core/App/app_init.c
     Core/App/app_tasks.c
-    Core/App/motor_zdt.c
     Core/App/error_handler.c
     Core/App/printer_axis.c
+    Core/App/motor_sequence.c    # 电机运动序列控制模块
     Core/App/realtime_motor.c   # 实时电机控制核心
     Core/App/motor_monitor.c   # 电机监控与反馈系统
     
@@ -90,11 +90,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # App层（业务编排）
     Core/App
-    
-    # SYSTEM层（系统核心）
-    Drivers/SYSTEM/sys
+    Core/Inc
     Drivers/SYSTEM/delay
     Drivers/SYSTEM/fifo
     Drivers/SYSTEM/sys_timer  # V3.5: 非阻塞定时器
@@ -109,7 +106,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     
     # Middlewares层（可重用服务）
     Drivers/Middlewares/LOGGER
-    Drivers/Middlewares/USMART  # 保留USMART调试组件
+    Drivers/Middlewares/USMART
+
+    # SYSTEM层补充sys.h路径
+    Drivers/SYSTEM/sys
 
     # 标准库头文件路径（gcc-arm-none-eabi）
     $ENV{GNU_ARM_TOOLCHAIN}/lib/gcc/arm-none-eabi/13.3.1/include
@@ -119,6 +119,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Debug>:FEATURE_USMART_ENABLE=1>
+        $<$<CONFIG:Release>:FEATURE_USMART_ENABLE=0>
     # Add user defined symbols
     $<$<CONFIG:Release>:NDEBUG>  # Release构建定义NDEBUG，禁用调试功能
     

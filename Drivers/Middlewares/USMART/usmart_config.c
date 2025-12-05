@@ -13,6 +13,7 @@
 #include "delay.h"
 #include "usmart_interface.h"  /* USMART 可调用函数接口 */
 #include "y_v2.h"               /* V3.0: Y系列X固件协议驱动 */
+#include "emm_uart.h"           /* V3.0: EMM UART通信层 */
 
 /* 函数名列表初始化(用户自己添加)
  * 用户直接在这里输入要执行的函数名及其查找串
@@ -58,31 +59,11 @@ struct _m_usmart_nametab usmart_nametab[] =
     {(void *)printer_move_y, "void printer_move_y(int32_t distance,uint16_t speed)"},
     {(void *)printer_move_z, "void printer_move_z(int32_t distance,uint16_t speed)"},
     {(void *)printer_move_xyz, "void printer_move_xyz(int32_t x,int32_t y,int32_t z,uint16_t speed)"},
-    /* 毫米单位移动（应用层推荐，USMART兼容整数版本）*/
-    {(void *)printer_move_x_mm_int, "void printer_move_x_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_move_y_mm_int, "void printer_move_y_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_move_z_mm_int, "void printer_move_z_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_xyz_mm_int, "void printer_xyz_mm_int(int16_t x_dmm,int16_t y_dmm,int16_t z_dmm,uint16_t speed)"},
-    /* 回零与状态 */
-    {(void *)printer_home_x, "void printer_home_x(void)"},
-    {(void *)printer_home_y, "void printer_home_y(void)"},
-    {(void *)printer_home_z, "void printer_home_z(void)"},
-    {(void *)printer_home_all_axes, "void printer_home_all_axes(void)"},
-    {(void *)printer_estop, "void printer_estop(void)"},
-    {(void *)printer_show_status, "void printer_show_status(void)"},
-    /* 调试统计模块 */
-    {(void *)crc_stats, "void crc_stats(void)"},
-    {(void *)fifo_stats, "void fifo_stats(void)"},
-    {(void *)motor_monitor_status, "void motor_monitor_status(void)"},  /* V3.7: 电机监控 */
-    /* V3.7: 帮助系统 */
-    {(void *)motor_help, "void motor_help(void)"},  /* 电机命令帮助 */
-    
-    /* 毫米单位移动（应用层推荐，USMART兼容整数版本）*/
-    {(void *)printer_move_x_mm_int, "void printer_move_x_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_move_y_mm_int, "void printer_move_y_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_move_z_mm_int, "void printer_move_z_mm_int(int16_t distance_dmm,uint16_t speed)"},
-    {(void *)printer_xyz_mm_int, "void printer_xyz_mm_int(int16_t x_dmm,int16_t y_dmm,int16_t z_dmm,uint16_t speed)"},
-    
+    /* 毫米单位移动（应用层推荐，USMART兼容整数版本，精度0.02mm）*/
+    {(void *)printer_move_x_mm_int, "void printer_move_x_mm_int(int16_t distance_50um,uint16_t speed)"},
+    {(void *)printer_move_y_mm_int, "void printer_move_y_mm_int(int16_t distance_50um,uint16_t speed)"},
+    {(void *)printer_move_z_mm_int, "void printer_move_z_mm_int(int16_t distance_50um,uint16_t speed)"},
+    {(void *)printer_xyz_mm_int, "void printer_xyz_mm_int(int16_t x_50um,int16_t y_50um,int16_t z_50um,uint16_t speed)"},
     /* 回零与状态 */
     {(void *)printer_home_x, "void printer_home_x(void)"},
     {(void *)printer_home_y, "void printer_home_y(void)"},
@@ -94,7 +75,7 @@ struct _m_usmart_nametab usmart_nametab[] =
     /* 调试统计模块 */
     {(void *)crc_stats, "void crc_stats(void)"},
     {(void *)fifo_stats, "void fifo_stats(void)"},
-    {(void *)motor_monitor_status, "void motor_monitor_status(void)"},  /* V3.7: 电机监控 */
+    {(void *)emm_uart_print_stats, "void emm_uart_print_stats(void)"},  /* EMM UART通信统计 */
     
     /* V3.7: 帮助系统 */
     {(void *)motor_help, "void motor_help(void)"},  /* 电机命令帮助 */
@@ -121,7 +102,7 @@ struct _m_usmart_dev usmart_dev =
     .cmd_rec = usmart_cmd_rec,
     .exe = usmart_exe,
     .scan = usmart_scan,
-    .fnum = sizeof(usmart_nametab) / sizeof(struct _m_usmart_nametab), /* 函数数量 */
+    .fnum = sizeof(usmart_nametab) / sizeof(usmart_nametab[0]), /* 函数数量 */
     .pnum = 0,      /* 参数数量 */
     .id = 0,        /* 函数ID */
     .sptype = 1,    /* 参数显示类型,0,10进制;1,16进制 */

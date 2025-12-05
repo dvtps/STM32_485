@@ -95,9 +95,10 @@ bool emm_parser_parse(const uint8_t *rx_data, uint16_t len, motor_response_t *re
 }
 
 /**
- * @brief       解析位置查询响应（S_CPOS, 功能码0x36）
- * @note        帧格式: [addr] [0x36] [pos_HH] [pos_HL] [pos_LH] [pos_LL] [0x6B]
+ * @brief       解析位置查询响应（S_CPOS/S_ENCL, 功能码0x36/0x31）
+ * @note        帧格式: [addr] [0x36/0x31] [pos_HH] [pos_HL] [pos_LH] [pos_LL] [0x6B]
  *              总长度: 7字节
+ *              支持S_CPOS(实时位置)和S_ENCL(编码器校准位置)
  */
 bool emm_parser_position(const uint8_t *rx_data, uint16_t len, int32_t *position)
 {
@@ -105,8 +106,8 @@ bool emm_parser_position(const uint8_t *rx_data, uint16_t len, int32_t *position
         return false;
     }
     
-    /* 验证功能码 */
-    if (rx_data[1] != 0x36) {
+    /* 验证功能码 - 支持S_CPOS(0x36)和S_ENCL(0x31) */
+    if (rx_data[1] != 0x36 && rx_data[1] != 0x31) {
         return false;
     }
     
@@ -246,11 +247,14 @@ static emm_response_type_t identify_frame_type(const uint8_t *rx_data, uint16_t 
     uint8_t func_code = rx_data[1];
     
     switch (func_code) {
+        case 0x31:
+            return EMM_RESP_POSITION;   /* 编码器位置查询响应（S_ENCL）*/
+            
         case 0x35:
             return EMM_RESP_VELOCITY;   /* 速度查询响应 */
             
         case 0x36:
-            return EMM_RESP_POSITION;   /* 位置查询响应 */
+            return EMM_RESP_POSITION;   /* 位置查询响应（S_CPOS）*/
             
         case 0x37:
             return EMM_RESP_PERR;       /* 位置误差响应 */

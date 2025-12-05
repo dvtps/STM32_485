@@ -16,11 +16,12 @@
 #include "main.h"
 #include "app_init.h"
 #include "app_tasks.h"
-#include "motor_zdt.h"
 #include "emm_uart.h"
 #include "iwdg.h"
 #include "printer_axis.h"
 #include "motor_monitor.h"
+#include "motor_sequence.h"    /* 电机运动序列控制 */
+#include "key.h"               /* 按键驱动 */
 #include "app_config.h"
 #include "logger.h"
 #include "realtime_motor.h"
@@ -65,7 +66,7 @@ int main(void)
 #endif
     
     printer_axis_init();    /* 3D打印机3轴初始化 */
-    motor_zdt_init();       /* 保留兼容测试代码 */
+    motor_sequence_init();  /* 电机运动序列模块初始化 */
     
     /* V3.7: 初始化电机监控系统（反馈闭环）*/
     motor_monitor_init();
@@ -90,6 +91,22 @@ int main(void)
     while (1)
     {
         app_tasks_run();
+        
+        /* 按键检测和运动序列控制 */
+        static uint8_t key_last_state = 0;  /* 按键上一次状态 */
+        uint8_t key_current = key_scan(0);  /* 读取当前按键状态 */
+        
+        /* 检测KEY0按下（按键按下时触发） */
+        if (key_current == KEY0_PRES && key_last_state != KEY0_PRES)
+        {
+            printf("[KEY] KEY0按下，启动X轴运动序列\r\n");
+            motor_sequence_run_x_axis_demo();
+        }
+        
+        key_last_state = key_current;  /* 更新按键状态 */
+        
+        /* 运动序列任务处理 */
+        motor_sequence_task();
         
 #if FEATURE_WATCHDOG_ENABLE
         /* 首次喂狗（延迟启动看门狗） */

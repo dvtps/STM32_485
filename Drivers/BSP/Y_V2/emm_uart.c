@@ -181,13 +181,27 @@ uint8_t emm_uart_send_with_timeout(const uint8_t *data, uint16_t len, uint32_t t
         return 1;
     }
     
+    /* 检查UART发送状态 */
+    if (g_uart2_handle.gState != HAL_UART_STATE_READY)
+    {
+        g_stats.tx_busy_cnt++;
+        return 1;  /* UART外设忙 */
+    }
+    
+    /* 检查DMA发送状态 */
+    if (__HAL_UART_GET_FLAG(&g_uart2_handle, UART_FLAG_TXE) == RESET)
+    {
+        g_stats.tx_busy_cnt++;
+        return 1;  /* UART发送缓冲区未空 */
+    }
+    
     g_tx_busy = true;
     status = HAL_UART_Transmit_DMA(&g_uart2_handle, (uint8_t*)data, len);
     
     if (status == HAL_OK)
     {
-        g_stats.tx_success_cnt++;
-        g_stats.last_tx_tick = current_tick;
+        /* DMA启动成功，等待完成回调再统计和更新时间戳 */
+        /* 注意：不在这里设置last_tx_tick，避免过早触发频率限制 */
         return 0;
     }
     else
@@ -249,6 +263,14 @@ void emm_uart_tx_complete_callback(void)
 {
 #if (EMM_UART_TX_MODE != EMM_UART_MODE_BLOCKING)
     g_tx_busy = false;
+    /* DMA传输完成，统计成功次数 */
+    g_stats.tx_success_cnt++;
+    
+    /* 在传输完成时更新时间戳，用于频率限制 */
+    g_stats.last_tx_tick = HAL_GetTick();
+    
+    /* 确保UART状态被重置为READY */
+    g_uart2_handle.gState = HAL_UART_STATE_READY;
 #endif
 }
 

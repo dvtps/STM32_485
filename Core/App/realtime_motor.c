@@ -233,6 +233,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2)
     {
+        /* 调用EMM UART的发送完成回调 */
+        extern void emm_uart_tx_complete_callback(void);
+        emm_uart_tx_complete_callback();
+        
         g_dma_busy = false;  /* 标记DMA空闲 */
         
 #if RT_ENABLE_PROFILING
@@ -261,6 +265,42 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 #if RT_ENABLE_PROFILING
             g_perf.dma_start_count++;
             g_perf.last_cmd_tick = dwt_get_cycles();
+#endif
+        }
+    }
+}
+
+/**
+ * @brief       UART错误回调
+ * @param       huart: UART句柄
+ * @retval      无
+ * @note        DMA传输错误时调用
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        /* 调用EMM UART的发送错误回调 */
+        extern void emm_uart_tx_error_callback(void);
+        emm_uart_tx_error_callback();
+        
+        g_dma_busy = false;  /* 标记DMA空闲 */
+        
+        /* 清除错误标志 */
+        __HAL_UART_CLEAR_FLAG(huart, UART_FLAG_PE);
+        __HAL_UART_CLEAR_FLAG(huart, UART_FLAG_FE);
+        __HAL_UART_CLEAR_FLAG(huart, UART_FLAG_NE);
+        __HAL_UART_CLEAR_FLAG(huart, UART_FLAG_ORE);
+        
+        /* 尝试发送下一个命令 */
+        rt_cmd_frame_t next_frame;
+        if (queue_pop(&next_frame))
+        {
+            g_dma_busy = true;
+            g_dma_current_frame = next_frame.data;
+            
+#if RT_USE_DMA
+            HAL_UART_Transmit_DMA(&g_uart2_handle, (uint8_t*)next_frame.data, next_frame.length);
 #endif
         }
     }

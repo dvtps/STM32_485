@@ -9,10 +9,12 @@
  */
 
 #include "app_tasks.h"
-#include "motor_zdt.h"
 #include "emm_uart.h"
 #include "motor_monitor.h"
 #include "sys_timer.h"
+#include "logger.h"
+#include "led.h"        /* LED心跳任务 */
+#include "app_config.h" /* LED心跳周期配置 */
 #include <stdio.h>
 
 #if FEATURE_WATCHDOG_ENABLE
@@ -23,9 +25,13 @@
 static struct {
     uint32_t comm_process_cnt;      /* 通信处理次数 */
     uint32_t motor_control_cnt;     /* 电机控制次数 */
+    uint32_t led_heartbeat_cnt;     /* LED心跳次数 */
     uint32_t motor_monitor_cnt;     /* 电机监控次数（V3.7）*/
     uint32_t watchdog_feed_cnt;     /* 喂狗次数 */
 } g_task_stats = {0};
+
+/* LED心跳任务私有变量 */
+static uint32_t led_tick = 0;               /* LED闪烁时间戳 */
 
 /**
  * @brief       任务初始化
@@ -64,15 +70,32 @@ void task_comm_process(void)
 }
 
 /**
- * @brief       任务2：电机控制
+ * @brief       任务2：电机控制任务
  * @param       无
  * @retval      无
  * @note        每次主循环都调用，高优先级
  */
 void task_motor_control(void)
 {
-    motor_zdt_run();
+    /* 电机控制逻辑已移至其他模块 */
     g_task_stats.motor_control_cnt++;
+}
+
+/**
+ * @brief       任务2.5：LED心跳指示任务
+ * @param       无
+ * @retval      无
+ * @note        500ms周期LED闪烁，系统运行状态指示
+ */
+void task_led_heartbeat(void)
+{
+    /* LED心跳指示系统运行（独立计时） */
+    if ((HAL_GetTick() - led_tick) > LED_HEARTBEAT_PERIOD_MS)
+    {
+        led_tick = HAL_GetTick();
+        LED0_TOGGLE();  /* 心跳闪烁 */
+        g_task_stats.led_heartbeat_cnt++;
+    }
 }
 
 /**
@@ -111,6 +134,7 @@ void app_tasks_run(void)
 {
     task_comm_process();    /* 优先级1: 通信帧处理 */
     task_motor_control();   /* 优先级2: 电机控制 */
+    task_led_heartbeat();   /* 优先级2.5: LED心跳指示 */
     task_motor_monitor();   /* 优先级3: 电机监控（V3.7）*/
     task_watchdog_feed();   /* 优先级4: 看门狗喂狗 */
 }

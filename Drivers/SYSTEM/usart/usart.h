@@ -112,10 +112,4 @@ void usart_init(uint32_t baudrate);                     /* 统一初始化接口
 uint32_t get_idle_interrupt_count(void);                /* 获取IDLE中断计数 */
 uint32_t get_fifo_overflow_count(void);                 /* 获取FIFO溢出计数 */
 
-/* V3.5 Phase 8 P1优化: 增量CRC校验函数 */
-void reset_incremental_crc(void);                       /* 重置增量CRC状态 */
-uint16_t get_incremental_crc(void);                     /* 获取当前累积的CRC值 */
-uint16_t get_crc_byte_count(void);                      /* 获取已计算的字节数 */
-uint32_t get_crc_calc_count(void);                      /* 获取CRC计算帧数统计 */
-
 #endif

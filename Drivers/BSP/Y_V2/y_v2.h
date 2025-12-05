@@ -32,6 +32,9 @@
 #include "stm32f1xx.h"  // HAL库头文件，提供__IO宏定义
 #include <stdbool.h>    // 提供bool类型定义
 
+/* 调试开关 */
+#define Y_V2_DEBUG_ENABLE 1  /* 启用Y_V2协议调试输出 */
+
 /**********************************************************
 ***	Y_V2步进闭环控制例程
 ***	编写作者：ZHANGDATOU

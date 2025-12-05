@@ -127,6 +127,7 @@ void printer_axis_init(void)
     /* 清零状态 */
     memset(&g_printer, 0, sizeof(printer_state_t));
     
+#ifndef NDEBUG
     printf("\r\n");
     LOG_PRINTER("3轴 4电机系统初始化");
     LOG_PRINTER("机械参数: 导程%.1fmm/圈, 理论分辨率%.5fmm, 装配精度±%.2fmm", 
@@ -139,16 +140,25 @@ void printer_axis_init(void)
     
 #if PRINTER_ENABLE_ALL_ON_START
     LOG_PRINTER("正在使能所有电机...");
+#endif
+
+#if PRINTER_HOME_ON_STARTUP
+    LOG_PRINTER("正在执行全轴回零...");
+#endif
+#endif
+
+#if PRINTER_ENABLE_ALL_ON_START
     printer_axis_enable_all();
     HAL_Delay(100);
 #endif
 
 #if PRINTER_HOME_ON_STARTUP
-    LOG_PRINTER("正在执行全轴回零...");
     printer_home_all(MOTOR_HOME_MODE);
 #endif
 
+#ifndef NDEBUG
     LOG_PRINTER("初始化完成");
+#endif
 }
 
 /**
@@ -247,8 +257,8 @@ bool printer_axis_move_relative(printer_axis_t axis, int32_t distance, uint16_t 
 
     const axis_config_t *cfg = &g_axis_config[axis];
 
-    printf("[DEBUG] axis_move_relative: axis=%d, addr[0]=0x%02X, dir=%d, pulses=%lu, angle=%.2f, speed=%d, acc=%d, motor_count=%d\r\n",
-        axis, cfg->motor_addrs[0], dir, (unsigned long)pulses, angle, actual_speed, actual_acc, cfg->motor_count);
+    printf("[DEBUG] axis_move_relative: axis=%d, addr[0]=0x%02X, dir=%d, pulses=%lu, angle=%d.%02d, speed=%d, acc=%d, motor_count=%d\r\n",
+        axis, cfg->motor_addrs[0], dir, (unsigned long)pulses, (int)angle, ((int)(angle * 100) % 100), actual_speed, actual_acc, cfg->motor_count);
 
     /* 如果是Y轴双电机，需要同步运动 */
     if (cfg->motor_count == 2 && PRINTER_SYNC_Y_AXIS) {
@@ -265,7 +275,7 @@ bool printer_axis_move_relative(printer_axis_t axis, int32_t distance, uint16_t 
     } else {
         /* 单电机轴，直接运动 */
         for (uint8_t i = 0; i < cfg->motor_count; i++) {
-            printf("[DEBUG] 单电机运动: addr=0x%02X, dir=%d, speed=%d, angle=%.2f\r\n", cfg->motor_addrs[i], dir, actual_speed, angle);
+            printf("[DEBUG] 单电机运动: addr=0x%02X, dir=%d, speed=%d, angle=%d.%02d\r\n", cfg->motor_addrs[i], dir, actual_speed, (int)angle, ((int)(angle * 100) % 100));
             Y_V2_Bypass_Pos_Control(cfg->motor_addrs[i], dir, (float)actual_speed, angle,
                                     2, false);
             HAL_Delay(10);
@@ -490,8 +500,8 @@ bool printer_move_mm(printer_axis_t axis, float distance_mm, uint16_t speed, uin
         uint32_t pulses = mm_to_pulses(abs_mm);
         int32_t signed_pulses = pulses * dir;
 
-        printf("[DEBUG] Move: %c%.2fmm = %ld pulses, speed=%d\r\n",
-            (dir > 0 ? '+' : '-'), abs_mm, (long)signed_pulses, speed);
+        printf("[DEBUG] Move: %c%d.%02dmm = %ld pulses, speed=%d\r\n",
+            (dir > 0 ? '+' : '-'), (int)abs_mm, ((int)(abs_mm * 100) % 100), (long)signed_pulses, (int)speed);
 
         /* 直接传递方向到下层 */
         return printer_axis_move_relative(axis, signed_pulses, speed, acc);

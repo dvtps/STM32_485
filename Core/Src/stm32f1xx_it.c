@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 /* 串口中断已在Drivers/SYSTEM/usart/usart.c中实现 */
 #include "app_config.h"  /* 用于REALTIME_MOTOR_ENABLE宏 */
+#include "emm_uart.h"    /* EMM UART通信层，用于DMA回调 */
 
 #if REALTIME_MOTOR_ENABLE
 extern DMA_HandleTypeDef hdma_usart2_tx;

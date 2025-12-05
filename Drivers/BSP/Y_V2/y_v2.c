@@ -30,6 +30,8 @@
 #include "emm_uart.h"
 #include <stdio.h>
 
+/* 调试输出控制宏现在在y_v2.h中定义 */
+
 /* 绝对值宏（与官方例程完全一致） */
 #ifndef ABS
 #define ABS(x) ((x) > 0 ? (x) : -(x))
@@ -354,12 +356,14 @@ void Y_V2_Bypass_Pos_Control(uint8_t addr, uint8_t dir, float vel, float pos, ui
   cmd[11] =  0x6B;                      // 校验字节
 
   // 调试输出：打印协议帧内容
-  printf("[Y_V2] Bypass_Pos_Control: addr=0x%02X, dir=%d, vel=%.2f, pos=%.2f, raf=%d, snF=%d\r\n", addr, dir, vel, pos, raf, snF);
+#if Y_V2_DEBUG_ENABLE
+  printf("[Y_V2] Bypass_Pos_Control: addr=0x%02X, dir=%d, vel=%d.%02d, pos=%d.%02d, raf=%d, snF=%d\r\n", addr, dir, (int)vel, ((int)(vel * 100) % 100), (int)pos, ((int)(pos * 100) % 100), raf, snF);
   printf("[Y_V2] Frame: ");
   for (int i = 0; i < 12; i++) {
     printf("%02X ", cmd[i]);
   }
   printf("\r\n");
+#endif
 
   emm_uart_send((const uint8_t *)cmd, 12);
 }

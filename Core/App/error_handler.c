@@ -121,25 +121,9 @@ void error_assert(const char *file, uint32_t line, const char *msg)
  */
 const char* error_to_string(error_code_t error)
 {
-    switch (error)
-    {
-        case ERR_OK:                return "OK";
-        case ERR_NULL_POINTER:      return "NULL_POINTER";
-        case ERR_INVALID_PARAM:     return "INVALID_PARAM";
-        case ERR_OUT_OF_BOUNDS:     return "OUT_OF_BOUNDS";
-        case ERR_BUFFER_OVERFLOW:   return "BUFFER_OVERFLOW";
-        case ERR_TIMEOUT:           return "TIMEOUT";
-        case ERR_BUSY:              return "BUSY";
-        case ERR_NOT_READY:         return "NOT_READY";
-        case ERR_HAL_FAILED:        return "HAL_FAILED";
-        case ERR_CHECKSUM:          return "CHECKSUM";
-        case ERR_COMMUNICATION:     return "COMMUNICATION";
-        case ERR_NO_RESPONSE:       return "NO_RESPONSE";
-        case ERR_OVERFLOW:          return "OVERFLOW";
-        case ERR_UNDERFLOW:         return "UNDERFLOW";
-        case ERR_NOT_IMPLEMENTED:   return "NOT_IMPLEMENTED";
-        default:                    return "UNKNOWN";
-    }
+    static char buf[16];
+    sprintf(buf, "ERR_%d", (int)error);
+    return buf;
 }
 
 /**

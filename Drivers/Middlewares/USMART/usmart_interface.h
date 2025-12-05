@@ -69,8 +69,6 @@ void fifo_stats(void);                                 /* FIFO统计信息 */
 
 /* ============ V3.7: 电机监控系统 ============ */
 
-void motor_monitor_status(void);                       /* 显示电机监控状态（反馈闭环）*/
-
 /* ============ V3.5 Phase 1: 内存池调试接口 ============ */
 
 void mem_stats(void);                                  /* 内存池统计信息 */
@@ -127,11 +125,11 @@ void printer_move_z_mm(float distance_mm, uint16_t speed); /* Z轴移动（mm）
 /* 多轴协同运动（毫米单位）*/
 void printer_xyz_mm(float x_mm, float y_mm, float z_mm, uint16_t speed);  /* XYZ三轴协同运动（mm）*/
 
-/* 整数版本mm移动函数（USMART兼容，精度0.1mm）*/
-void printer_move_x_mm_int(int16_t distance_dmm, uint16_t speed); /* X轴移动（分米：105=10.5mm）*/
-void printer_move_y_mm_int(int16_t distance_dmm, uint16_t speed); /* Y轴移动（分米）*/
-void printer_move_z_mm_int(int16_t distance_dmm, uint16_t speed); /* Z轴移动（分米）*/
-void printer_xyz_mm_int(int16_t x_dmm, int16_t y_dmm, int16_t z_dmm, uint16_t speed); /* XYZ同步（分米）*/
+/* 整数版本mm移动函数（USMART兼容，精度0.02mm）*/
+void printer_move_x_mm_int(int16_t distance_50um, uint16_t speed); /* X轴移动（50微米：50=1.0mm）*/
+void printer_move_y_mm_int(int16_t distance_50um, uint16_t speed); /* Y轴移动（50微米）*/
+void printer_move_z_mm_int(int16_t distance_50um, uint16_t speed); /* Z轴移动（50微米）*/
+void printer_xyz_mm_int(int16_t x_50um, int16_t y_50um, int16_t z_50um, uint16_t speed); /* XYZ同步（50微米）*/
 
 /* 回零功能 */
 void printer_home_x(void);                             /* X轴回零 */

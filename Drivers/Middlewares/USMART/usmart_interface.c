@@ -1,11 +1,11 @@
 /**
- ******************************************************************************
+ *******************************************************************************
  * @file    usmart_interface.c
  * @author  STM32_485 Project
  * @version V3.1
  * @date    2025-12-01
- * @brief   USMART接口函数实现（桥接层�?
- ******************************************************************************
+ * @brief   USMART接口函数实现（桥接层）
+ *******************************************************************************
  */
 
 #include "usmart_interface.h"
@@ -23,17 +23,11 @@
 #include "usart.h"  /* V3.5 Phase 8: CRC和FIFO统计 */
 #include "printer_axis.h"  /* 3D打印机3轴控制 */
 #include "motor_monitor.h"  /* V3.7: 电机监控系统 */
+#include "emm_uart.h"       /* V3.0: EMM UART通信层统计 */
 #include <stdio.h>
 #include <stdlib.h>  /* for abs() */
 #include <string.h>  /* memset */
-
-/* ============ 单电机控制实现（保留有调试输出的函数）============ */
-
-void motor_enable(uint8_t addr, uint8_t enable)
-{
-    Y_V2_En_Control(addr, enable ? true : false, false);
-    printf("Motor#%d %s\r\n", addr, enable ? "ENABLED" : "DISABLED");
-}
+#include <math.h>    /* for fabsf() */
 
 /* ============ 3D打印机3轴控制实现 ============ */
 
@@ -45,6 +39,32 @@ void printer_enable_all(void)
 void printer_disable_all(void)
 {
     printer_axis_disable_all();
+}
+
+/* ===== 通用移动函数（减少代码重复） ===== */
+
+static void printer_move_axis_int(uint8_t axis, const char *axis_name, int16_t distance_50um, uint16_t speed)
+{
+    /* 精度提高到0.02mm (50微米)，参数单位改为0.02mm */
+    float distance_mm = ((float)distance_50um >= 0 ? (float)distance_50um : -(float)distance_50um) / 50.0f;
+    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
+    int8_t dir = (distance_50um >= 0) ? 1 : -1;
+
+    /* 使用整数运算显示距离，避免浮点printf问题 */
+    /* 50微米单位: 50 = 1.0mm, 25 = 0.5mm, 1 = 0.02mm */
+    int16_t abs_50um = (distance_50um >= 0) ? distance_50um : -distance_50um;
+    int16_t mm_part = abs_50um / 50;           /* 整数毫米部分 */
+    int16_t um_part = (abs_50um % 50) * 20;    /* 微米部分 (0.02mm = 20微米) */
+
+    printf("[CMD] %s轴移动: %c%d.%02dmm = %ld脉冲%s, 速度=%dRPM\r\n",
+           axis_name, (dir > 0 ? '+' : '-'), mm_part, um_part / 10,
+           (long)pulses * dir, (axis == AXIS_Y) ? " (双电机同步)" : "", speed);
+
+    bool result = printer_move_mm(axis, distance_mm * dir, speed, 0);
+
+    if (!result) {
+        printf("[ERROR] 移动失败!\r\n");
+    }
 }
 
 /* ===== 以脉冲数为单位的移动函数（底层调试用） ===== */
@@ -77,69 +97,42 @@ void printer_move_xyz(int32_t x, int32_t y, int32_t z, uint16_t speed)
 void printer_move_x_mm(float distance_mm, uint16_t speed)
 {
     printer_move_mm(AXIS_X, distance_mm, speed, 0);
-    printf("X-axis: %.2f mm (%.0f pulses @ 160p/mm)\r\n", 
+    printf("X-axis: %.2f mm (%.0f pulses @ 160p/mm)\r\n",
            distance_mm, distance_mm * PULSES_PER_MM);
 }
 
-/* ===== 整数版本mm移动函数（USMART兼容，精度0.1mm） ===== */
+/* ===== 高精度毫米移动函数（精度0.02mm，USMART兼容整数版本）===== */
 
-void printer_move_x_mm_int(int16_t distance_dmm, uint16_t speed)
+void printer_move_x_mm_int(int16_t distance_50um, uint16_t speed)
 {
-    float distance_mm = fabsf((float)distance_dmm) / 10.0f;  /* 绝对值转毫米 */
-    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
-    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
+    printer_move_axis_int(AXIS_X, "X", distance_50um, speed);
+}
 
-    printf("[CMD] X轴移动: %c%.1fmm = %ld脉冲, 速度=%dRPM\r\n", 
-           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
+void printer_move_y_mm_int(int16_t distance_50um, uint16_t speed)
+{
+    printer_move_axis_int(AXIS_Y, "Y", distance_50um, speed);
+}
 
-    bool result = printer_move_mm(AXIS_X, distance_mm * dir, speed, 0);
+void printer_move_z_mm_int(int16_t distance_50um, uint16_t speed)
+{
+    printer_move_axis_int(AXIS_Z, "Z", distance_50um, speed);
+}
+
+void printer_xyz_mm_int(int16_t x_dmm, int16_t y_dmm, int16_t z_dmm, uint16_t speed)
+{
+    float x_mm = (float)x_dmm / 10.0f;
+    float y_mm = (float)y_dmm / 10.0f;
+    float z_mm = (float)z_dmm / 10.0f;
+
+    printf("[CMD] XYZ三轴同步移动: X%c%.1fmm, Y%c%.1fmm, Z%c%.1fmm, 速度=%dRPM\r\n",
+           (x_mm >= 0 ? '+' : '-'), (x_mm >= 0 ? x_mm : -x_mm),
+           (y_mm >= 0 ? '+' : '-'), (y_mm >= 0 ? y_mm : -y_mm),
+           (z_mm >= 0 ? '+' : '-'), (z_mm >= 0 ? z_mm : -z_mm), speed);
+
+    bool result = printer_move_xyz_mm(x_mm, y_mm, z_mm, speed);
 
     if (!result) {
-        printf("[ERROR] 移动失败!\r\n");
-    }
-}
-
-void printer_move_y_mm(float distance_mm, uint16_t speed)
-{
-    printer_move_mm(AXIS_Y, distance_mm, speed, 0);
-    printf("Y-axis: %.2f mm (dual motor sync)\r\n", distance_mm);
-}
-
-void printer_move_z_mm(float distance_mm, uint16_t speed)
-{
-    printer_move_mm(AXIS_Z, distance_mm, speed, 0);
-    printf("Z-axis: %.2f mm\r\n", distance_mm);
-}
-
-void printer_move_y_mm_int(int16_t distance_dmm, uint16_t speed)
-{
-    float distance_mm = fabsf((float)distance_dmm) / 10.0f;
-    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
-    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
-
-    printf("[CMD] Y轴移动: %c%.1fmm = %ld脉冲 (双电机同步), 速度=%dRPM\r\n",
-           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
-
-    bool result = printer_move_mm(AXIS_Y, distance_mm * dir, speed, 0);
-
-    if (!result) {
-        printf("[ERROR] 移动失败!\r\n");
-    }
-}
-
-void printer_move_z_mm_int(int16_t distance_dmm, uint16_t speed)
-{
-    float distance_mm = fabsf((float)distance_dmm) / 10.0f;
-    int32_t pulses = (int32_t)(distance_mm * PULSES_PER_MM);
-    int8_t dir = (distance_dmm >= 0) ? 1 : -1;
-
-    printf("[CMD] Z轴移动: %c%.1fmm = %ld脉冲, 速度=%dRPM\r\n",
-           (dir > 0 ? '+' : '-'), distance_mm, (long)pulses * dir, speed);
-
-    bool result = printer_move_mm(AXIS_Z, distance_mm * dir, speed, 0);
-
-    if (!result) {
-        printf("[ERROR] 移动失败!\r\n");
+        printf("[ERROR] 三轴同步移动失败!\r\n");
     }
 }
 
@@ -147,22 +140,6 @@ void printer_xyz_mm(float x_mm, float y_mm, float z_mm, uint16_t speed)
 {
     printer_move_xyz_mm(x_mm, y_mm, z_mm, speed);  /* 调用printer_axis.c中的实现 */
     printf("XYZ sync: X=%.2f Y=%.2f Z=%.2f mm\r\n", x_mm, y_mm, z_mm);
-}
-
-void printer_xyz_mm_int(int16_t x_dmm, int16_t y_dmm, int16_t z_dmm, uint16_t speed)
-{
-    float x_mm = x_dmm / 10.0f;
-    float y_mm = y_dmm / 10.0f;
-    float z_mm = z_dmm / 10.0f;
-    
-    printf("[CMD] XYZ同步移动: X=%d.%dmm Y=%d.%dmm Z=%d.%dmm, 速度=%dRPM\r\n",
-           x_dmm/10, abs(x_dmm%10), y_dmm/10, abs(y_dmm%10), z_dmm/10, abs(z_dmm%10), speed);
-    
-    bool result = printer_move_xyz_mm(x_mm, y_mm, z_mm, speed);
-    
-    if (!result) {
-        printf("[ERROR] 移动失败!\r\n");
-    }
 }
 
 void printer_home_x(void)
@@ -201,18 +178,26 @@ void printer_show_status(void)
     const char *axis_names[] = {"X(Width)", "Y(Depth)", "Z(Height)"};
     for (int i = 0; i < 3; i++) {
         const axis_state_t *axis = &state->axes[i];
-        printf("%s: En=%d Home=%d Pos=%.2fmm (%ldp) Speed=%d\r\n",
+        int mm_part = (int)axis->position_mm;
+        int frac_part = (int)(axis->position_mm * 100) % 100;
+        if (frac_part < 0) frac_part = -frac_part;
+        printf("%s: En=%d Home=%d Pos=%d.%02dmm (%ldp) Speed=%d Acc=%d\r\n",
                axis_names[i],
                axis->enabled,
                axis->homed,
-               axis->position_mm,
+               mm_part,
+               frac_part,
                (long)axis->position_pulses,
-               axis->speed);
+               axis->speed,
+               axis->acceleration);
     }
     printf("========================================\r\n\r\n");
-}
-
-/* ============ V3.5 Phase 8 P1: 增量CRC调试实现 ============ */
+    
+    /* 显示通信统计 */
+    printf("========== Communication Stats ==========\r\n");
+    emm_uart_print_stats();
+    printf("=========================================\r\n\r\n");
+}/* ============ V3.5 Phase 8 P1: 增量CRC调试实现 ============ */
 
 /**
  * @brief       显示增量CRC统计信息
@@ -224,7 +209,7 @@ void crc_stats(void)
     uint16_t current_crc = get_incremental_crc();
     uint16_t byte_count = get_crc_byte_count();
     uint32_t calc_count = get_crc_calc_count();
-    
+
     printf("\r\n========== Incremental CRC Stats ==========\r\n");
     printf("Current CRC value:  0x%04X\r\n", current_crc);
     printf("Bytes calculated:   %u\r\n", byte_count);
@@ -291,14 +276,6 @@ void tim2_status(void)
 #endif /* REALTIME_MOTOR_ENABLE */
 
 /**
- * @brief       显示电机监控状态（V3.7反馈闭环）
- */
-void motor_monitor_status(void)
-{
-    motor_monitor_print_status();
-}
-
-/**
  * @brief       显示FIFO统计信息
  * @note        监控FIFO溢出情况（Phase 8优化指标）
  */
@@ -306,16 +283,16 @@ void fifo_stats(void)
 {
     uint32_t overflow_count = get_fifo_overflow_count();
     uint32_t idle_count = get_idle_interrupt_count();
-    
+
     printf("\r\n========== FIFO Statistics ==========\r\n");
     printf("FIFO size:          256 bytes\r\n");
     printf("FIFO overflow:      %lu times\r\n", (unsigned long)overflow_count);
     printf("IDLE interrupts:    %lu times\r\n", (unsigned long)idle_count);
-    
+
     if (idle_count > 0) {
         float overflow_rate = (float)overflow_count / idle_count * 100.0f;
         printf("Overflow rate:      %.2f%%\r\n", overflow_rate);
-        
+
         if (overflow_rate < 2.0f) {
             printf("Status:             GOOD (target: <2%%)\r\n");
         } else if (overflow_rate < 5.0f) {
@@ -337,85 +314,85 @@ void motor_help(void)
     printf("========================================\r\n");
     printf("       电机参数详细说明       \r\n");
     printf("========================================\r\n\r\n");
-    
+
     printf("【基本参数】\r\n");
     printf("  addr   - 电机地址 (1-255)\r\n");
     printf("           X轴=0x01, Y轴左=0x02, Y轴右=0x03, Z轴=0x04\r\n\r\n");
-    
+
     printf("  dir    - 旋转方向\r\n");
     printf("           0=顺时针(CW), 1=逆时针(CCW)\r\n\r\n");
-    
+
     printf("  speed  - 转速 (0-5000 RPM)\r\n");
     printf("           推荐: 低速=100-300, 中速=300-800, 高速=800-2000\r\n\r\n");
-    
+
     printf("  acc    - 加速度 (0-255)\r\n");
     printf("           0=立即启动, 1-255=梯形加减速\r\n");
     printf("           推荐: 低速=5-10, 中速=10-20, 高速=20-50\r\n\r\n");
-    
+
     printf("  pulses - 脉冲数 (位置模式)\r\n");
     printf("           16细分: 3200脉冲 = 1圈旋转\r\n");
     printf("           常用: 1600=半圈, 3200=1圈, 6400=2圈\r\n\r\n");
-    
+
     printf("【3D打印机机械参数】\r\n");
     printf("  丝杠导程   - 20mm/圈 (电机转1圈, 平台移动20mm)\r\n");
     printf("  脉冲密度   - 160脉冲/mm (3200脉冲/20mm)\r\n");
     printf("  理论分辨率 - 0.00625mm/脉冲 (20/3200)\r\n");
     printf("  实际精度   - 0.02mm (推荐最小移动单位)\r\n");
     printf("  行程范围   - X:300mm, Y:300mm, Z:400mm\r\n\r\n");
-    
+
     printf("【毫米单位移动（推荐，0.1mm精度）】\r\n");
     printf("  注意: USMART不支持浮点数，使用分米单位(0.1mm)\r\n");
     printf("  示例: 10.5mm → 输入105, -20.0mm → 输入-200\r\n\r\n");
-    
+
     printf("  1. X轴前进10.5mm\r\n");
     printf("     printer_move_x_mm_int(105,800)\r\n\r\n");
-    
+
     printf("  2. Y轴后退20mm (负数表示反向)\r\n");
     printf("     printer_move_y_mm_int(-200,600)\r\n\r\n");
-    
+
     printf("  3. Z轴上升5mm\r\n");
     printf("     printer_move_z_mm_int(50,200)\r\n\r\n");
-    
+
     printf("  4. XYZ三轴同步移动（G0快速定位）\r\n");
     printf("     printer_xyz_mm_int(100,150,25,1000)\r\n");
     printf("     => X=10.0mm, Y=15.0mm, Z=2.5mm\r\n\r\n");
-    
+
     printf("【Y_V2底层API直接调用（V3.0 X固件协议）】\r\n");
     printf("  注意: Y_V2使用角度(float)和加速度(RPM/S)\r\n");
     printf("  raf=0相对上次, raf=1绝对, raf=2相对当前\r\n");
     printf("  snF=0立即执行, snF=1同步等待\r\n\r\n");
-    
+
     printf("  1. 位置控制 - 电机1顺时针转1圈 (300RPM, 360度)\r\n");
     printf("     Y_V2_Bypass_Pos_Control(1,0,300.0,360.0,0,0)\r\n\r\n");
-    
+
     printf("  2. 速度控制 - 电机1持续转动 (500RPM, 加速度1000RPM/S)\r\n");
     printf("     Y_V2_Vel_Control(1,0,1000,500.0,0)\r\n\r\n");
-    
+
     printf("  3. 立即停止 - 急停电机1\r\n");
     printf("     Y_V2_Stop_Now(1,0)\r\n\r\n");
-    
+
     printf("  4. 回零 - 电机1模式0回零\r\n");
     printf("     Y_V2_Origin_Trigger_Return(1,0,0)\r\n\r\n");
-    
+
     printf("  5. 查询转速 - 读取电机1实时转速(参数14)\r\n");
     printf("     Y_V2_Read_Sys_Params(1,14)\r\n\r\n");
-    
+
     printf("【脉冲单位移动（3轴封装，推荐）】\r\n");
     printf("  1. X轴前进20mm (3200脉冲 = 20mm)\r\n");
     printf("     printer_move_x(3200,800)\r\n\r\n");
-    
+
     printf("【系统功能】\r\n");
     printf("  • 全轴回零: printer_home_all_axes()  // 自动Z→Y→X\r\n");
     printf("  • 紧急停止: printer_estop()\r\n");
     printf("  • 查询状态: printer_show_status()\r\n\r\n");
-    
+
     printf("【注意事项】\r\n");
     printf("  • 首次使用前必须使能: motor_enable(addr,1)\r\n");
     printf("  • 速度过高可能导致失步，建议<1000 RPM\r\n");
     printf("  • 加速度过小会导致启动缓慢\r\n");
     printf("  • Y轴双电机需同步: printer_move_y()自动处理\r\n");
     printf("  • 紧急情况使用: printer_estop()\r\n\r\n");
-    
+
     printf("========================================\r\n");
     printf("输入 '?' 查看所有可用命令\r\n");
     printf("========================================\r\n\r\n");
